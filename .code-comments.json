@@ -1,0 +1,170 @@
+{
+ "approved": [
+  {
+   "file": "internal/imports_test.go",
+   "name": "allowedImports",
+   "text": "// allowedImports lists the internal packages each internal package may\n// import. go test runs in internal/, so \"./...\" never reaches cmd/neurokit,\n// which may import anything.\n"
+  },
+  {
+   "file": "internal/imports_test.go",
+   "name": "TestImportDirection",
+   "text": "// The client must not reach into server internals, and runner must not\n// depend on the wire format. A new package fails until it has a row, so its\n// place is decided on purpose. Test-only imports are not checked.\n"
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "wire",
+   "text": "// Package wire defines what crosses HTTP between the neurokit client and a\n// broker, and what a handler writes on fd 3: the error body, the shared codes\n// and their HTTP statuses, the write outcome, and strict JSON decoding.\n"
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "statuses",
+   "text": "// statuses maps each shared code to the HTTP status the broker sends with it.\n"
+  },
+  {
+   "file": "internal/wire/decode_test.go",
+   "name": "TestDecodeRejectsLooseJSON",
+   "text": "// Every body neurokit reads is meant to go through DecodeOneJSONValue: request\n// arguments, handler and broker answers, and the manifest. Two existing\n// brokers cap no body size and accept an empty body. A write value such as\n// \"Sent\" must fail here, not pass on as the handler's own outcome.\n"
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "WriteState.UnmarshalText",
+   "text": "// JSON decoding rejects a write value that ParseWriteState does not\n// accept, such as \"Sent\" or \"done\". A JSON null skips this check and\n// leaves the value empty, which later counts as unknown.\n"
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "MarkUnclearChangeAsUnknown",
+   "text": "// In cases where the write status is missing or unknown, or contradicts\n// the error code, this function marks the change as unknown. This function\n// prevents outputs like \"success\" + \"WriteStateUnknown\" and\n// \"provider-rejected\" + \"WriteStateUnknown\" and replaces them with\n// \"change-unknown\" + \"WriteStateUnknown\".\n"
+  },
+  {
+   "file": "internal/wire/write_test.go",
+   "name": "TestUnclearChangeBecomesUnknown",
+   "text": "// Ensures that MarkUnclearChangeAsUnknown does not return contradictory\n// outputs.\n"
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "OutcomeUnknown",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "VerificationFailed",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "SpecMismatch",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "DeadlineExceeded",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "statuses.BrokerUnavailable",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "Status",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/decode_test.go",
+   "name": "TestDecodeStrictRejectsLooseInput",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "Write.UnmarshalText",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "Reconcile",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write_test.go",
+   "name": "TestReconcileMovesTowardUnknown",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "BrokerUnavailable",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "DeclaredStatus",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "ErrorBody",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "ErrorDetail",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "Shared",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/codes.go",
+   "name": "const InvalidRequest",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/decode.go",
+   "name": "DecodeStrict",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "Normalize",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "ParseWrite",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "Write",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "WriteNotSent",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "WriteSent",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "WriteUnknown",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write.go",
+   "name": "WriteVerified",
+   "text": ""
+  },
+  {
+   "file": "internal/wire/write_test.go",
+   "name": "TestNormalizeMovesTowardUnknown",
+   "text": ""
+  }
+ ],
+ "avoid": {}
+}
