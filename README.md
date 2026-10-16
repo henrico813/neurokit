@@ -46,6 +46,8 @@ go test ./...
 
 `.github/workflows/ci.yml` runs them on every pull request and every push to `main`.
 
+The container test needs Docker on Linux: `sh test/container/run.sh`. It runs `serve` in a Python image with a real handler, and checks that `serve` refuses to start without an init process, leaves no processes behind and stops quickly on `docker stop`. It prints each request's time. CI runs it as the `container` job.
+
 ## License
 
 neurokit is licensed under the MIT license. See [LICENSE](LICENSE).

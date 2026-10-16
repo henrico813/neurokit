@@ -1,0 +1,16 @@
+{
+  "name": "container-test",
+  "spec": 1,
+  "broker_url_env": "CONTAINER_TEST_URL",
+  "max_handlers": 1,
+  "program": ["python", "/opt/tool/handler.py"],
+  "check": ["python", "-c", "import google.genai"],
+  "commands": {
+    "ask": {
+      "max_body_bytes": 1024,
+      "max_response_bytes": 1024,
+      "deadline_ms": 10000,
+      "args": {"question": {"type": "string", "max_length": 100}}
+    }
+  }
+}
