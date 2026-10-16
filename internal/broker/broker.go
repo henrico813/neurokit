@@ -8,10 +8,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -98,9 +100,9 @@ func (s *Server) checkAndRunCommand(r *http.Request, requestID, name string, cmd
 		return *refusal
 	}
 
-	// Waiting for slots counts against the deadline. A client hanging up does
-	// not stop the handler.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), time.Duration(cmd.DeadlineMS)*time.Millisecond)
+	// Waiting for slots counts against the deadline, and a client that hangs up
+	// while waiting cancels its request before anything runs.
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(cmd.DeadlineMS)*time.Millisecond)
 	defer cancel()
 	// A lock: write command takes every slot, so it runs alone.
 	slotsNeeded := int64(1)
@@ -108,21 +110,42 @@ func (s *Server) checkAndRunCommand(r *http.Request, requestID, name string, cmd
 		slotsNeeded = int64(s.manifest.MaxHandlers)
 	}
 	if err := s.slots.Acquire(ctx, slotsNeeded); err != nil {
-		return *refuseBeforeRun(cmd, wire.CodeDeadlineExceeded, "the deadline passed before the command could start")
+		if errors.Is(err, context.DeadlineExceeded) {
+			return *refuseBeforeRun(cmd, wire.CodeDeadlineExceeded, "the deadline passed before the command could start")
+		}
+		return *refuseBeforeRun(cmd, wire.CodeNotReady, "the command did not start: its client hung up or the broker is stopping")
 	}
 	defer s.slots.Release(slotsNeeded)
-	handlerRun := s.runner.Run(ctx, Job{
+	// Once started, a handler finishes even if its client hangs up, so a
+	// change is never cut off halfway. WithoutCancel drops the deadline, so it
+	// is set again.
+	deadline, _ := ctx.Deadline()
+	runCtx, cancelRun := context.WithDeadline(context.WithoutCancel(ctx), deadline)
+	defer cancelRun()
+	handlerRun := s.runAndRecoverPanic(runCtx, Job{
 		Command:          name,
 		RequestID:        requestID,
 		Mutating:         cmd.Mutating,
 		Stdin:            stdin,
 		MaxResponseBytes: cmd.MaxResponseBytes,
 	})
-	reply := buildReplyFromHandlerRun(cmd, handlerRun, ctx.Err() != nil)
+	reply := buildReplyFromHandlerRun(cmd, handlerRun, runCtx.Err() != nil)
 	if cmd.Mutating {
 		s.log.Info("audit", "request_id", requestID, "command", name, "approval", approvalLabel, "code", reply.code, "write", reply.write)
 	}
 	return reply
+}
+
+// A panic counts as a crash, so a mutation still replies change-unknown and
+// gets its audit log entry, instead of a dropped connection.
+func (s *Server) runAndRecoverPanic(ctx context.Context, job Job) (handlerRun RunResult) {
+	defer func() {
+		if p := recover(); p != nil {
+			s.log.Error("runner_panic", "request_id", job.RequestID, "panic", fmt.Sprint(p), "stack", string(debug.Stack()))
+			handlerRun = RunResult{ExitCode: -1}
+		}
+	}()
+	return s.runner.Run(ctx, job)
 }
 
 func (s *Server) checkCommandRequest(r *http.Request, cmd *manifest.Command) (stdin []byte, approvalLabel string, refusal *callerReply) {

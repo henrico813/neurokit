@@ -71,13 +71,15 @@ func buildReplyFromHandlerRun(cmd *manifest.Command, handlerRun RunResult, timed
 	return reply
 }
 
-// A handler may send only codes the broker can reply with; only the client
-// sends broker-unavailable.
+// Shared codes a handler may send. The rest, such as spec-mismatch, report
+// what only the broker or the client can know.
+var handlerSharedCodes = []string{
+	wire.CodeInvalidRequest, wire.CodeForbidden, wire.CodeNotFound, wire.CodeUnexpected,
+	wire.CodeProviderUnavailable, wire.CodeProviderRejected, wire.CodeChangeUnknown, wire.CodeVerificationFailed,
+}
+
 func isAllowedHandlerCode(cmd *manifest.Command, code string) bool {
-	if wire.IsSharedCode(code) {
-		return wire.LookupHTTPStatus(code) != 0
-	}
-	return slices.Contains(cmd.Errors, code)
+	return slices.Contains(handlerSharedCodes, code) || slices.Contains(cmd.Errors, code)
 }
 
 func writeReply(w http.ResponseWriter, requestID string, reply callerReply) {

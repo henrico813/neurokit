@@ -274,3 +274,67 @@ func TestWriteLockAndSlotsBoundConcurrency(t *testing.T) {
 		t.Errorf("peak %d handlers, write overlapped another: %t; want at most 2, and a write alone", peak, writeOverlapped)
 	}
 }
+
+// A bug in the runner must not drop a mutation's reply and audit log entry,
+// because its caller has to know the change may have happened.
+func TestRunnerPanicRepliesChangeUnknown(t *testing.T) {
+	srv, log := newTestServer(t, testManifest, func(context.Context, broker.Job) broker.RunResult {
+		panic("runner bug")
+	})
+
+	got := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]))
+
+	if got.status != 502 || got.Error.Code != wire.CodeChangeUnknown || got.Write != wire.WriteStateUnknown {
+		t.Errorf("swap = %d %+v, write %q; want 502 change-unknown, write unknown", got.status, got.Error, got.Write)
+	}
+	if audit := findLogEntry(t, log, "audit"); audit["code"] != wire.CodeChangeUnknown {
+		t.Errorf("audit log entry %v; want code change-unknown", audit)
+	}
+}
+
+// A change must not be made after its caller gave up waiting, and must not
+// be cut off halfway because its caller left once the handler started.
+func TestHangUpDropsQueuedNotRunning(t *testing.T) {
+	lookupRunning := make(chan struct{})
+	releaseLookup := make(chan struct{})
+	swapsRun := 0
+	runningSwap, hangUpRunningSwap := context.WithCancel(context.Background())
+	defer hangUpRunningSwap()
+	var runErr error
+	var runDeadline time.Time
+	srv, _ := newTestServer(t, testManifest, func(ctx context.Context, job broker.Job) broker.RunResult {
+		if job.Command == "lookup" {
+			close(lookupRunning)
+			<-releaseLookup
+			return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1}`)}
+		}
+		swapsRun++
+		hangUpRunningSwap()
+		runDeadline, _ = ctx.Deadline()
+		runErr = ctx.Err()
+		return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1,"write":"verified"}`)}
+	})
+	// 1. A lookup takes one of the two slots, so a swap, which needs both, waits.
+	go srv.ServeHTTP(httptest.NewRecorder(), newCommandRequest("lookup", validBody["lookup"]))
+	<-lookupRunning
+
+	// 2. The waiting swap's client hangs up.
+	ctx, hangUp := context.WithCancel(context.Background())
+	time.AfterFunc(20*time.Millisecond, hangUp)
+	queued := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]).WithContext(ctx))
+	swapsRunWhileQueued := swapsRun
+	// 3. A new swap waits 50 ms for the lookup, then its client hangs up while
+	// its handler runs.
+	sent := time.Now()
+	time.AfterFunc(50*time.Millisecond, func() { close(releaseLookup) })
+	running := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]).WithContext(runningSwap))
+
+	if queued.status != 503 || queued.Error.Code != wire.CodeNotReady || queued.Write != wire.WriteStateNotSent || swapsRunWhileQueued != 0 {
+		t.Errorf("queued swap = %d %+v, write %q, %d run; want 503 not-ready, write not-sent, none run",
+			queued.status, queued.Error, queued.Write, swapsRunWhileQueued)
+	}
+	if running.status != 200 || runErr != nil || runDeadline.IsZero() || runDeadline.Sub(sent) > 5*time.Second+25*time.Millisecond {
+		t.Errorf("running swap = %d, handler context error %v, deadline %v after sending; want 200, no error, the 5 s set on arrival",
+			running.status, runErr, runDeadline.Sub(sent))
+	}
+}
