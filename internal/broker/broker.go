@@ -46,6 +46,7 @@ type Server struct {
 	manifest    *manifest.Manifest
 	rawManifest []byte
 	runner      Runner
+	checkReady  func(context.Context) error
 	log         *slog.Logger
 	// Each handler uses memory, so at most max_handlers run at once, one per
 	// slot. A request takes all the slots it needs in one step, in arrival
@@ -53,11 +54,12 @@ type Server struct {
 	slots *semaphore.Weighted
 }
 
-func New(m *manifest.Manifest, rawManifest []byte, runner Runner, log *slog.Logger) *Server {
+func New(m *manifest.Manifest, rawManifest []byte, runner Runner, checkReady func(context.Context) error, log *slog.Logger) *Server {
 	return &Server{
 		manifest:    m,
 		rawManifest: rawManifest,
 		runner:      runner,
+		checkReady:  checkReady,
 		log:         log,
 		slots:       semaphore.NewWeighted(int64(m.MaxHandlers)),
 	}
@@ -83,6 +85,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(s.rawManifest)
 		return
+	case r.URL.Path == "/readyz":
+		reply = callerReply{result: json.RawMessage(`"ok"`)}
+		if err := s.checkReady(r.Context()); err != nil {
+			reply = callerReply{code: wire.CodeNotReady, message: "the broker is not ready; its log has details", detail: err.Error()}
+		}
 	default:
 		reply = callerReply{result: json.RawMessage(`"ok"`)}
 	}

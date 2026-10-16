@@ -59,7 +59,8 @@ func newTestServer(t *testing.T, manifestText string, run runFunc) (*broker.Serv
 		t.Fatal(err)
 	}
 	var log bytes.Buffer
-	return broker.New(m, []byte(manifestText), run, slog.New(slog.NewJSONHandler(&log, nil))), &log
+	isReady := func(context.Context) error { return nil }
+	return broker.New(m, []byte(manifestText), run, isReady, slog.New(slog.NewJSONHandler(&log, nil))), &log
 }
 
 func newCommandRequest(command, body string) *http.Request {

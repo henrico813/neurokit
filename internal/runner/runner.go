@@ -19,7 +19,7 @@ import (
 const (
 	// After SIGTERM at the deadline, the handler has this long to exit before
 	// SIGKILL.
-	gracePeriod = 2 * time.Second
+	GracePeriod = 2 * time.Second
 	// A process that left the group can hold a pipe open for as long as it
 	// lives, so reading stops this long after the group is killed.
 	drainLimit     = 200 * time.Millisecond
@@ -63,7 +63,7 @@ func Run(ctx context.Context, p Process) Result {
 	cmd.ExtraFiles = []*os.File{answerW} // the handler sees the answer pipe as fd 3
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
-	cmd.WaitDelay = gracePeriod
+	cmd.WaitDelay = GracePeriod
 	err = cmd.Start()
 	// The child has its own copies now, and a read ends only once every copy
 	// is closed.
