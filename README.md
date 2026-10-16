@@ -2,7 +2,7 @@
 
 neurokit will be one Go binary for the boundary between an AI assistant's command-line tools and the broker containers that hold their credentials. Each tool lists its commands in a `manifest.json`. In a broker container, `neurokit serve` will check every request against that manifest and run the tool's handler program for it, in its own process group and under a hard deadline. On the assistant's side, the same binary will be the CLI.
 
-neurokit has no release yet, and the binary does not exist yet. This repository is being built in small reviewed steps toward `v0.1.0`. So far it holds the wire format: the error body, the shared error codes, the `write` field that says whether a change reached the outside service, and strict JSON decoding. It also holds the manifest package, which reads a tool's `manifest.json` and checks each request's arguments against it. And it holds the broker's HTTP core, which checks each request and turns what a handler did into the reply; nothing starts handler processes yet.
+neurokit has no release yet, and the binary does not exist yet. This repository is being built in small reviewed steps toward `v0.1.0`. So far it holds the wire format: the error body, the shared error codes, the `write` field that says whether a change reached the outside service, and strict JSON decoding. It also holds the manifest package, which reads a tool's `manifest.json` and checks each request's arguments against it. And it holds the broker's HTTP core, which checks each request and turns what a handler did into the reply, and the process runner, which starts one handler and always gets it back. Nothing connects the two yet; `neurokit serve` will.
 
 ## Terms
 
@@ -27,6 +27,7 @@ All Go code is in `internal/` packages; there is no public Go library. Each pack
 | `internal/wire` | What goes over HTTP, and what a handler writes on file descriptor 3, an extra pipe that only its answer uses: the error body, the shared error codes and their HTTP statuses, the `write` field, and strict JSON decoding |
 | `internal/manifest` | The manifest format: reading and validating `manifest.json`, and checking each request's arguments against it |
 | `internal/broker` | Turning an HTTP request into a handler run and a reply: routes, request checks, handler slots and the write lock, and building the reply from what the handler did |
+| `internal/runner` | Running one handler process and reporting what it did: its own process group, killed at the deadline and after it exits, the answer on file descriptor 3, capped output logs and a private `TMPDIR` |
 
 Packages import each other in one direction only. `internal/imports_test.go` lists what each package may import, and fails when a package imports an internal package outside its row or has no row at all.
 

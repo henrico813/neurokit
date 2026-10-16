@@ -16,10 +16,10 @@ var allowedImports = map[string][]string{
 	"wire":     {},
 	"manifest": {"wire"},
 	"runner":   {},
+	// broker and runner never import each other; cmd/neurokit connects them.
 	"broker": {
 		"wire",
 		"manifest",
-		"runner",
 	},
 	"cli": {
 		"wire",

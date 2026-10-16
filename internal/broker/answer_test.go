@@ -36,6 +36,7 @@ func TestHandlerAnswersMapToCodeAndWrite(t *testing.T) {
 		{name: "mutation declared code not sent", command: "swap", exitCode: 1, answer: `{"error":{"code":"lineup-locked","message":"x"},"write":"not-sent"}`, wantStatus: 422, wantCode: "lineup-locked", wantWrite: wire.WriteStateNotSent},
 		{name: "mutation error without write", command: "swap", exitCode: 1, answer: `{"error":{"code":"lineup-locked","message":"x"}}`, wantStatus: 502, wantCode: wire.CodeChangeUnknown, wantWrite: wire.WriteStateUnknown},
 		{name: "mutation killed after answering", command: "swap", exitCode: -1, answer: `{"error":{"code":"lineup-locked","message":"x"},"write":"sent"}`, wantStatus: 502, wantCode: wire.CodeChangeUnknown, wantWrite: wire.WriteStateUnknown},
+		{name: "mutation broker-only code", command: "swap", exitCode: 1, answer: `{"error":{"code":"deadline-exceeded","message":"x"},"write":"not-sent"}`, wantStatus: 500, wantCode: wire.CodeUnexpected, wantWrite: wire.WriteStateNotSent},
 		{name: "mutation past deadline", command: "swap", waitForDeadline: true, wantStatus: 502, wantCode: wire.CodeChangeUnknown, wantWrite: wire.WriteStateUnknown},
 	}
 	for _, tt := range tests {
