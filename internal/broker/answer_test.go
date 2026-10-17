@@ -12,7 +12,7 @@ import (
 // A tool's old client reported changes that might have happened as never
 // sent, so callers could repeat them. Any unclear mutation result must reply
 // change-unknown.
-func TestHandlerAnswersMapToCodeAndWrite(t *testing.T) {
+func TestHandlerAnswerDecidesReply(t *testing.T) {
 	tests := []struct {
 		name            string
 		command         string

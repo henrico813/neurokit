@@ -50,7 +50,7 @@ func readPID(t *testing.T, pidFile string) int {
 	return pid
 }
 
-// A killed process stays a zombie until something reaps it, so a zombie
+// A killed process stays a zombie until its parent cleans it up, so a zombie
 // counts as ended.
 func isRunning(pid int) bool {
 	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
@@ -85,7 +85,7 @@ func TestStdoutNoiseDoesNotCorruptAnswer(t *testing.T) {
 	result, _, log := runScript(t, context.Background(), `echo "scout: analyzing"; cat >&3`)
 
 	if string(result.Answer) != `{"query":"kim"}` || result.ExitCode != 0 {
-		t.Errorf("answer %q, exit %d; want the handler's stdin echoed on fd 3, exit 0", result.Answer, result.ExitCode)
+		t.Errorf("answer %q, exit %d; want the handler's stdin echoed on the answer pipe, exit 0", result.Answer, result.ExitCode)
 	}
 	output := findLogEntries(log, "handler_output")
 	if len(output) != 1 || output[0]["stream"] != "stdout" || output[0]["line"] != "scout: analyzing" {
@@ -140,10 +140,10 @@ func TestLeftoverChildKilledAnswerTrusted(t *testing.T) {
 	}
 }
 
-// A daemon that leaves the group escapes the kill and can keep fd 3 open as
-// long as it lives. Without a bound on reading, it holds the request and its
-// slots open with it.
-func TestFdThreeHolderCannotStallRequest(t *testing.T) {
+// A daemon that leaves the group escapes the kill and can keep the answer pipe
+// open as long as it lives. Without a bound on reading, it holds the request
+// open, and other requests can wait behind it.
+func TestAnswerPipeHolderCannotStallRequest(t *testing.T) {
 	start := time.Now()
 
 	// The handler answers only once the daemon has left the group, so the

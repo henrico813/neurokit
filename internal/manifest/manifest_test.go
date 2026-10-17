@@ -57,7 +57,7 @@ func writeManifest(t *testing.T, text string) string {
 // brokers set no request size limit, and a typo like "mutatng" would run a
 // change as a read.
 func TestUnsafeManifestsAreRejected(t *testing.T) {
-	if _, err := manifest.ReadAndValidate(writeManifest(t, validManifest)); err != nil {
+	if _, _, err := manifest.ReadAndValidate(writeManifest(t, validManifest)); err != nil {
 		t.Fatalf("the valid manifest must parse: %v", err)
 	}
 	tests := []struct {
@@ -88,7 +88,7 @@ func TestUnsafeManifestsAreRejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			path := writeManifest(t, strings.Replace(validManifest, tt.replace, tt.with, 1))
 
-			_, err := manifest.ReadAndValidate(path)
+			_, _, err := manifest.ReadAndValidate(path)
 
 			if err == nil {
 				t.Fatalf("ReadAndValidate accepted the manifest; want an error containing %q", tt.want)

@@ -13,28 +13,25 @@ import (
 
 const maxApprovalLength = 200
 
-// Returns the request's arguments only if the body is one JSON object within
-// MaxBodyBytes, with every declared argument present, nothing else, and each
-// value within its bounds. A command that asks for approval may also get an
-// "approval" label of up to 200 characters; it stays in the map for the broker
-// to log and remove before the handler runs. Numbers come back as json.Number.
-func (c *Command) DecodeAndValidateArgs(raw []byte) (map[string]any, error) {
-	var args map[string]any
+// Returns the arguments, with numbers as json.Number, only if the body is one
+// JSON object within MaxBodyBytes holding exactly the declared arguments, each
+// within its bounds. An approval label, when the command allows one, comes
+// back on its own so the handler never sees it.
+func (c *Command) DecodeAndValidateArgs(raw []byte) (args map[string]any, approvalLabel string, err error) {
 	if err := wire.DecodeOneJSONValue(bytes.NewReader(raw), c.MaxBodyBytes, &args); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	rest := args
 	if label, ok := args["approval"]; ok && c.Approval {
 		if !isTextWithin(label, maxApprovalLength) {
-			return nil, fmt.Errorf("approval must be text of at most %d characters", maxApprovalLength)
+			return nil, "", fmt.Errorf("approval must be text of at most %d characters", maxApprovalLength)
 		}
-		rest = maps.Clone(args)
-		delete(rest, "approval")
+		approvalLabel = label.(string)
+		delete(args, "approval")
 	}
-	if err := validateArgValues(c.Args, rest); err != nil {
-		return nil, err
+	if err := validateArgValues(c.Args, args); err != nil {
+		return nil, "", err
 	}
-	return args, nil
+	return args, approvalLabel, nil
 }
 
 func validateArgValues(fields map[string]Arg, values map[string]any) error {

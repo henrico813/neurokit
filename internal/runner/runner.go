@@ -60,7 +60,7 @@ func Run(ctx context.Context, p Process) Result {
 	// Pass the pipes as files, not readers or writers, so Wait does not also
 	// wait for a leftover child that still holds one.
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinR, stdoutW, stderrW
-	cmd.ExtraFiles = []*os.File{answerW} // the handler sees the answer pipe as fd 3
+	cmd.ExtraFiles = []*os.File{answerW} // the handler sees it as file 3, after stdin, stdout and stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = GracePeriod
@@ -105,7 +105,7 @@ func Run(ctx context.Context, p Process) Result {
 	select {
 	case <-drained:
 	case <-time.After(drainLimit):
-		p.Log.Warn("handler_pipe_held", "detail", "a process outside the handler's group still holds a pipe")
+		p.Log.Warn("handler_pipe_held", "error", "a process outside the handler's group still holds a pipe")
 	}
 	closeFiles(stdinW, stdoutR, stderrR, answerR)
 	<-drained

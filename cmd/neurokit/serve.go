@@ -27,11 +27,7 @@ const (
 // Once stop ends, returns after every reply is written, or at most the grace
 // period plus 1 s later.
 func serveBroker(stop context.Context, manifestPath string, listen func() (net.Listener, error), log *slog.Logger) error {
-	m, err := manifest.ReadAndValidate(manifestPath)
-	if err != nil {
-		return err
-	}
-	rawManifest, err := os.ReadFile(manifestPath)
+	m, rawManifest, err := manifest.ReadAndValidate(manifestPath)
 	if err != nil {
 		return err
 	}

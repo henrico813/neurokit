@@ -19,71 +19,23 @@ func TestDecodeRejectsLooseJSON(t *testing.T) {
 		maxBytes int64
 		wantErr  bool
 	}{
-		{
-			name:     "exactly at the limit",
-			input:    body,
-			maxBytes: int64(len(body)),
-			wantErr:  false,
-		},
-		{
-			name:     "one byte over the limit",
-			input:    body + " ",
-			maxBytes: int64(len(body)),
-			wantErr:  true,
-		},
-		{
-			name:     "empty",
-			input:    "  \n",
-			maxBytes: 100,
-			wantErr:  true,
-		},
-		{
-			name:     "null",
-			input:    "null",
-			maxBytes: 100,
-			wantErr:  true,
-		},
-		{
-			name:     "trailing data",
-			input:    body + " {}",
-			maxBytes: 100,
-			wantErr:  true,
-		},
-		{
-			name:     "unknown field",
-			input:    `{"error":{"code":"unexpected","message":"x"},"wirte":"sent"}`,
-			maxBytes: 100,
-			wantErr:  true,
-		},
-		{
-			name:     "unrecognized write value",
-			input:    `{"error":{"code":"unexpected","message":"x"},"write":"Sent"}`,
-			maxBytes: 100,
-			wantErr:  true,
-		},
+		{name: "exactly at the limit", input: body, maxBytes: int64(len(body)), wantErr: false},
+		{name: "one byte over the limit", input: body + " ", maxBytes: int64(len(body)), wantErr: true},
+		{name: "empty", input: "  \n", maxBytes: 100, wantErr: true},
+		{name: "null", input: "null", maxBytes: 100, wantErr: true},
+		{name: "trailing data", input: body + " {}", maxBytes: 100, wantErr: true},
+		{name: "unknown field", input: `{"error":{"code":"unexpected","message":"x"},"wirte":"sent"}`, maxBytes: 100, wantErr: true},
+		{name: "unrecognized write value", input: `{"error":{"code":"unexpected","message":"x"},"write":"Sent"}`, maxBytes: 100, wantErr: true},
 	}
 	for _, tt := range tests {
-		t.Run(
-			tt.name,
-			func(t *testing.T) {
-				var got wire.ErrorBody
+		t.Run(tt.name, func(t *testing.T) {
+			var got wire.Reply
 
-				err := wire.DecodeOneJSONValue(
-					strings.NewReader(tt.input),
-					tt.maxBytes,
-					&got,
-				)
+			err := wire.DecodeOneJSONValue(strings.NewReader(tt.input), tt.maxBytes, &got)
 
-				if (err != nil) != tt.wantErr {
-					t.Errorf(
-						"DecodeOneJSONValue(%q, %d) error = %v; want error: %t",
-						tt.input,
-						tt.maxBytes,
-						err,
-						tt.wantErr,
-					)
-				}
-			},
-		)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DecodeOneJSONValue(%q, %d) error = %v; want error: %t", tt.input, tt.maxBytes, err, tt.wantErr)
+			}
+		})
 	}
 }

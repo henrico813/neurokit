@@ -68,24 +68,26 @@ func New(m *manifest.Manifest, rawManifest []byte, runner Runner, checkReady fun
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	requestID := generateRequestID()
-	commandName, isCommand := strings.CutPrefix(r.URL.Path, "/commands/")
+	commandName, isCommand := strings.CutPrefix(r.URL.Path, wire.CommandRoutePrefix)
 	var cmd *manifest.Command
 	if isCommand {
 		cmd = s.manifest.Commands[commandName]
+	} else {
+		commandName = ""
 	}
 	var reply callerReply
 	switch {
 	case cmd != nil:
 		reply = s.checkAndRunCommand(r, requestID, commandName, cmd)
-	case isCommand || !slices.Contains([]string{"/livez", "/readyz", "/manifest"}, r.URL.Path):
+	case isCommand || !slices.Contains([]string{wire.LivezRoute, wire.ReadyzRoute, wire.ManifestRoute}, r.URL.Path):
 		reply = callerReply{code: wire.CodeNotFound, message: fmt.Sprintf("no route %q", r.URL.Path)}
 	case r.Method != http.MethodGet:
 		reply = callerReply{code: wire.CodeMethodNotAllowed, message: r.URL.Path + " takes GET"}
-	case r.URL.Path == "/manifest":
+	case r.URL.Path == wire.ManifestRoute:
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(s.rawManifest)
 		return
-	case r.URL.Path == "/readyz":
+	case r.URL.Path == wire.ReadyzRoute:
 		reply = callerReply{result: json.RawMessage(`"ok"`)}
 		if err := s.checkReady(r.Context()); err != nil {
 			reply = callerReply{code: wire.CodeNotReady, message: "the broker is not ready; its log has details", detail: err.Error()}
@@ -96,8 +98,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeReply(w, requestID, reply)
 	// Health checks arrive every few seconds, so successful GETs are not logged.
 	if isCommand || reply.code != "" {
-		s.log.Info("request", "request_id", requestID, "path", r.URL.Path, "code", reply.code, "write", reply.write,
-			"duration_ms", time.Since(start).Milliseconds(), "detail", reply.detail)
+		s.log.Info("request", "request_id", requestID, "command", commandName, "path", r.URL.Path, "code", reply.code,
+			"write", reply.write, "duration_ms", time.Since(start).Milliseconds(), "error", reply.detail)
 	}
 }
 
@@ -164,7 +166,7 @@ func (s *Server) checkCommandRequest(r *http.Request, cmd *manifest.Command) (st
 	if r.URL.RawQuery != "" {
 		return nil, "", refuseBeforeRun(cmd, wire.CodeInvalidRequest, "commands take no query string")
 	}
-	if spec := r.Header.Get("Neurokit-Spec"); spec != strconv.Itoa(s.manifest.Spec) {
+	if spec := r.Header.Get(wire.SpecHeader); spec != strconv.Itoa(s.manifest.Spec) {
 		message := fmt.Sprintf("client spec %q does not match broker spec %d", spec, s.manifest.Spec)
 		return nil, "", refuseBeforeRun(cmd, wire.CodeSpecMismatch, message)
 	}
@@ -176,14 +178,10 @@ func (s *Server) checkCommandRequest(r *http.Request, cmd *manifest.Command) (st
 		message := fmt.Sprintf("body is larger than %d bytes", cmd.MaxBodyBytes)
 		return nil, "", refuseBeforeRun(cmd, wire.CodeRequestTooLarge, message)
 	}
-	args, err := cmd.DecodeAndValidateArgs(body)
+	args, approvalLabel, err := cmd.DecodeAndValidateArgs(body)
 	if err != nil {
 		return nil, "", refuseBeforeRun(cmd, wire.CodeInvalidRequest, err.Error())
 	}
-	// The handler never gets the label, so a tool cannot act differently
-	// because of what an agent wrote there.
-	approvalLabel, _ = args["approval"].(string)
-	delete(args, "approval")
 	stdin, err = json.Marshal(args)
 	if err != nil {
 		return nil, "", refuseBeforeRun(cmd, wire.CodeUnexpected, "could not encode the arguments")

@@ -75,12 +75,14 @@ func startServe(t *testing.T, manifestPath string) (url string, stopServe func()
 
 type reply struct {
 	status int
-	Error  wire.ErrorDetail `json:"error"`
-	Write  wire.WriteState  `json:"write"`
+	wire.Reply
 }
 
 func postCommand(t *testing.T, url, command string, body io.Reader) reply {
 	t.Helper()
+	// A success reply has no error, so this empty one lets tests read Error.Code
+	// on any reply.
+	got := reply{Reply: wire.Reply{Error: &wire.ErrorDetail{}}}
 	r, err := http.NewRequest(http.MethodPost, url+"/commands/"+command, body)
 	if err != nil {
 		t.Fatal(err)
@@ -89,10 +91,10 @@ func postCommand(t *testing.T, url, command string, body io.Reader) reply {
 	resp, err := http.DefaultClient.Do(r)
 	if err != nil {
 		t.Errorf("POST %s: %v", command, err)
-		return reply{}
+		return got
 	}
 	defer resp.Body.Close()
-	got := reply{status: resp.StatusCode}
+	got.status = resp.StatusCode
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 		t.Errorf("POST %s: reply is not JSON: %v", command, err)
 	}
@@ -159,7 +161,9 @@ func TestReadyzRunsReadyProgram(t *testing.T) {
 // On stop, a running change must report that it may have happened, a waiting
 // one must never run, and serve must exit soon, but only after both replies.
 func TestSigtermStopsHandlersAndQueue(t *testing.T) {
-	manifestPath, dir := writeTool(t, testManifest, `touch DIR/started; sleep 30`)
+	// The handler ignores SIGTERM, so it is killed only at the end of the grace
+	// period, and serve must still wait for its reply.
+	manifestPath, dir := writeTool(t, testManifest, `trap '' TERM; touch DIR/started; sleep 30`)
 	url, stopServe, log := startServe(t, manifestPath)
 	running, queued := make(chan reply), make(chan reply)
 	go func() { running <- postCommand(t, url, "swap", strings.NewReader(`{"position":3}`)) }()

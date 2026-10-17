@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -50,11 +48,7 @@ func failTestIfRun(t *testing.T) runFunc {
 
 func newTestServer(t *testing.T, manifestText string, run runFunc) (*broker.Server, *bytes.Buffer) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "manifest.json")
-	if err := os.WriteFile(path, []byte(manifestText), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	m, err := manifest.ReadAndValidate(path)
+	m, err := manifest.ParseAndValidate([]byte(manifestText))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,9 +65,7 @@ func newCommandRequest(command, body string) *http.Request {
 
 type reply struct {
 	status int
-	Result json.RawMessage  `json:"result"`
-	Error  wire.ErrorDetail `json:"error"`
-	Write  wire.WriteState  `json:"write"`
+	wire.Reply
 }
 
 func findLogEntry(t *testing.T, log *bytes.Buffer, msg string) map[string]any {
@@ -92,7 +84,9 @@ func serveAndDecode(t *testing.T, srv http.Handler, r *http.Request) reply {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, r)
-	got := reply{status: rec.Code}
+	// A success reply has no error, so this empty one lets tests read Error.Code
+	// on any reply.
+	got := reply{status: rec.Code, Reply: wire.Reply{Error: &wire.ErrorDetail{}}}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("%s %s: body %q is not JSON: %v", r.Method, r.URL, rec.Body, err)
 	}

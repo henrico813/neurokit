@@ -16,11 +16,11 @@ var (
 	listItem    = regexp.MustCompile(`^(- |\d+\. )`)
 )
 
-// Pages under docs/ are read on phones, where long paragraphs, wide code
-// lines and tables are hard to follow. The limits apply per line, so each
-// paragraph or list item must stay on one line.
+// The README and pages under docs/ are read on phones, where long
+// paragraphs, wide code lines and tables are hard to follow. The limits
+// apply per line, so each paragraph or list item must stay on one line.
 func TestDocsFitOnAPhone(t *testing.T) {
-	err := filepath.WalkDir("../docs", func(path string, d fs.DirEntry, err error) error {
+	checkPage := func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
 			return err
 		}
@@ -53,8 +53,10 @@ func TestDocsFitOnAPhone(t *testing.T) {
 			prevProse = isProse
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	}
+	for _, root := range []string{"../README.md", "../docs"} {
+		if err := filepath.WalkDir(root, checkPage); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

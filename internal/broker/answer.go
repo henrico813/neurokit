@@ -34,18 +34,14 @@ func refuseBeforeRun(cmd *manifest.Command, code, message string) *callerReply {
 // anything else is a crash or a timeout. A mutation whose result is unclear
 // replies change-unknown, never success or not-sent.
 func buildReplyFromHandlerRun(cmd *manifest.Command, handlerRun RunResult, timedOut bool) callerReply {
-	var answer struct {
-		Result     json.RawMessage   `json:"result"`
-		Error      *wire.ErrorDetail `json:"error"`
-		WriteState wire.WriteState   `json:"write"`
-	}
+	var answer wire.Reply
 	err := wire.DecodeOneJSONValue(bytes.NewReader(handlerRun.Answer), cmd.MaxResponseBytes, &answer)
 	var reply callerReply
 	switch {
 	case err == nil && handlerRun.ExitCode == 0 && answer.Result != nil && answer.Error == nil:
-		reply = callerReply{result: answer.Result, write: answer.WriteState}
+		reply = callerReply{result: answer.Result, write: answer.Write}
 	case err == nil && handlerRun.ExitCode == 1 && answer.Error != nil && answer.Result == nil:
-		reply = callerReply{code: answer.Error.Code, message: answer.Error.Message, write: answer.WriteState}
+		reply = callerReply{code: answer.Error.Code, message: answer.Error.Message, write: answer.Write}
 		if !isAllowedHandlerCode(cmd, reply.code) {
 			reply.code, reply.message = wire.CodeUnexpected, "the handler failed; the broker log has details"
 			reply.detail = fmt.Sprintf("handler sent undeclared code %q", answer.Error.Code)
@@ -84,15 +80,12 @@ func isAllowedHandlerCode(cmd *manifest.Command, code string) bool {
 
 func writeReply(w http.ResponseWriter, requestID string, reply callerReply) {
 	status := http.StatusOK
-	var body any = struct {
-		Result     json.RawMessage `json:"result"`
-		WriteState wire.WriteState `json:"write,omitempty"`
-	}{reply.result, reply.write}
+	body := wire.Reply{Result: reply.result, Write: reply.write}
 	if reply.code != "" {
 		status = wire.LookupHTTPStatus(reply.code)
-		body = wire.ErrorBody{
-			Error:      wire.ErrorDetail{Code: reply.code, Message: reply.message, RequestID: requestID},
-			WriteState: reply.write,
+		body = wire.Reply{
+			Error: &wire.ErrorDetail{Code: reply.code, Message: reply.message, RequestID: requestID},
+			Write: reply.write,
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
