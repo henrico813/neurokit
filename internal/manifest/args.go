@@ -17,13 +17,24 @@ const maxApprovalLength = 200
 // JSON object within MaxBodyBytes holding exactly the declared arguments, each
 // within its bounds. An approval label, when the command allows one, comes
 // back on its own so the handler never sees it.
-func (c *Command) DecodeAndValidateArgs(raw []byte) (args map[string]any, approvalLabel string, err error) {
-	if err := wire.DecodeOneJSONValue(bytes.NewReader(raw), c.MaxBodyBytes, &args); err != nil {
+func (c *Command) DecodeAndValidateArgs(raw []byte) (
+	args map[string]any,
+	approvalLabel string,
+	err error,
+) {
+	if err := wire.DecodeOneJSONValue(
+		bytes.NewReader(raw),
+		c.MaxBodyBytes,
+		&args,
+	); err != nil {
 		return nil, "", err
 	}
 	if label, ok := args["approval"]; ok && c.Approval {
 		if !isTextWithin(label, maxApprovalLength) {
-			return nil, "", fmt.Errorf("approval must be text of at most %d characters", maxApprovalLength)
+			return nil, "", fmt.Errorf(
+				"approval must be text of at most %d characters",
+				maxApprovalLength,
+			)
 		}
 		approvalLabel = label.(string)
 		delete(args, "approval")
@@ -56,7 +67,11 @@ func validateArgValue(name string, a Arg, value any) error {
 	switch a.Type {
 	case "string":
 		if !isTextWithin(value, a.MaxLength) {
-			return fmt.Errorf("%s must be text of at most %d characters", name, a.MaxLength)
+			return fmt.Errorf(
+				"%s must be text of at most %d characters",
+				name,
+				a.MaxLength,
+			)
 		}
 	case "integer":
 		number, ok := value.(json.Number)
@@ -65,7 +80,12 @@ func validateArgValue(name string, a Arg, value any) error {
 			ok = err == nil && n >= *a.Min && n <= *a.Max
 		}
 		if !ok {
-			return fmt.Errorf("%s must be a whole number from %d to %d", name, *a.Min, *a.Max)
+			return fmt.Errorf(
+				"%s must be a whole number from %d to %d",
+				name,
+				*a.Min,
+				*a.Max,
+			)
 		}
 	case "boolean":
 		if _, ok := value.(bool); !ok {
@@ -74,7 +94,11 @@ func validateArgValue(name string, a Arg, value any) error {
 	case "list":
 		items, ok := value.([]any)
 		if !ok || len(items) > a.MaxItems {
-			return fmt.Errorf("%s must be a list of at most %d items", name, a.MaxItems)
+			return fmt.Errorf(
+				"%s must be a list of at most %d items",
+				name,
+				a.MaxItems,
+			)
 		}
 		for _, item := range items {
 			if err := validateArgValue(name, *a.Items, item); err != nil {

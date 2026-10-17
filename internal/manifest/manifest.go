@@ -100,7 +100,11 @@ func ParseAndValidate(data []byte) (*Manifest, error) {
 		Spec int `json:"spec"`
 	}
 	if json.Unmarshal(data, &version) == nil && version.Spec != Spec {
-		return nil, fmt.Errorf("spec %d is not supported; this binary knows spec %d", version.Spec, Spec)
+		return nil, fmt.Errorf(
+			"spec %d is not supported; this binary knows spec %d",
+			version.Spec,
+			Spec,
+		)
 	}
 	var m Manifest
 	err := wire.DecodeOneJSONValue(bytes.NewReader(data), maxManifestBytes, &m)
@@ -109,7 +113,12 @@ func ParseAndValidate(data []byte) (*Manifest, error) {
 	}
 	var typeErr *json.UnmarshalTypeError
 	if errors.As(err, &typeErr) {
-		err = fmt.Errorf("field %q must be %s, not %s", typeErr.Field, typeErr.Type, typeErr.Value)
+		err = fmt.Errorf(
+			"field %q must be %s, not %s",
+			typeErr.Field,
+			typeErr.Type,
+			typeErr.Value,
+		)
 	}
 	if err != nil {
 		return nil, err
@@ -136,8 +145,14 @@ func (m *Manifest) validate() error {
 	// Health checks run every 5 s, so for the scout tool that is about 12%
 	// of a core. The name test catches the common mistake, not every slow
 	// program.
-	if len(m.Ready) > 0 && strings.HasPrefix(filepath.Base(m.Ready[0]), "python") {
-		return fmt.Errorf("ready must be cheap, such as a file test, not %q", m.Ready[0])
+	if len(m.Ready) > 0 && strings.HasPrefix(
+		filepath.Base(m.Ready[0]),
+		"python",
+	) {
+		return fmt.Errorf(
+			"ready must be cheap, such as a file test, not %q",
+			m.Ready[0],
+		)
 	}
 	for _, name := range slices.Sorted(maps.Keys(m.Commands)) {
 		if err := validateCommand(name, m.Commands[name]); err != nil {
@@ -184,7 +199,10 @@ func validateCommand(name string, c *Command) error {
 func validateDeclaredArgs(fields map[string]Arg) error {
 	for _, name := range slices.Sorted(maps.Keys(fields)) {
 		if !argName.MatchString(name) {
-			return fmt.Errorf("argument %q: name must be lowercase letters, digits and underscores", name)
+			return fmt.Errorf(
+				"argument %q: name must be lowercase letters, digits and underscores",
+				name,
+			)
 		}
 		if err := validateArgTypeAndBounds(fields[name]); err != nil {
 			return fmt.Errorf("argument %s: %w", name, err)

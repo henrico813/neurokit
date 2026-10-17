@@ -43,12 +43,14 @@ var statuses = map[string]int{
 }
 
 func IsSharedCode(code string) bool {
-	_, ok := statuses[code]
+	_,
+		ok := statuses[code]
 	return ok
 }
 
 func LookupHTTPStatus(code string) int {
-	if status, ok := statuses[code]; ok {
+	if status,
+		ok := statuses[code]; ok {
 		return status
 	}
 	return DeclaredCodeStatus

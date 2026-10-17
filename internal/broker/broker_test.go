@@ -29,9 +29,16 @@ const testManifest = `{
   }
 }`
 
-var shortDeadlines = strings.ReplaceAll(testManifest, `"deadline_ms": 5000`, `"deadline_ms": 50`)
+var shortDeadlines = strings.ReplaceAll(
+	testManifest,
+	`"deadline_ms": 5000`,
+	`"deadline_ms": 50`,
+)
 
-var validBody = map[string]string{"lookup": `{"query":"kim"}`, "swap": `{"position":3}`}
+var validBody = map[string]string{
+	"lookup": `{"query":"kim"}`,
+	"swap":   `{"position":3}`,
+}
 
 type runFunc func(ctx context.Context, job broker.Job) broker.RunResult
 
@@ -46,7 +53,14 @@ func failTestIfRun(t *testing.T) runFunc {
 	}
 }
 
-func newTestServer(t *testing.T, manifestText string, run runFunc) (*broker.Server, *bytes.Buffer) {
+func newTestServer(
+	t *testing.T,
+	manifestText string,
+	run runFunc,
+) (
+	*broker.Server,
+	*bytes.Buffer,
+) {
 	t.Helper()
 	m, err := manifest.ParseAndValidate([]byte(manifestText))
 	if err != nil {
@@ -54,11 +68,21 @@ func newTestServer(t *testing.T, manifestText string, run runFunc) (*broker.Serv
 	}
 	var log bytes.Buffer
 	isReady := func(context.Context) error { return nil }
-	return broker.New(m, []byte(manifestText), run, isReady, slog.New(slog.NewJSONHandler(&log, nil))), &log
+	return broker.New(
+		m,
+		[]byte(manifestText),
+		run,
+		isReady,
+		slog.New(slog.NewJSONHandler(&log, nil)),
+	), &log
 }
 
 func newCommandRequest(command, body string) *http.Request {
-	r := httptest.NewRequest(http.MethodPost, "/commands/"+command, strings.NewReader(body))
+	r := httptest.NewRequest(
+		http.MethodPost,
+		"/commands/"+command,
+		strings.NewReader(body),
+	)
 	r.Header.Set("Neurokit-Spec", "1")
 	return r
 }
@@ -86,9 +110,18 @@ func serveAndDecode(t *testing.T, srv http.Handler, r *http.Request) reply {
 	srv.ServeHTTP(rec, r)
 	// A success reply has no error, so this empty one lets tests read Error.Code
 	// on any reply.
-	got := reply{status: rec.Code, Reply: wire.Reply{Error: &wire.ErrorDetail{}}}
+	got := reply{
+		status: rec.Code,
+		Reply:  wire.Reply{Error: &wire.ErrorDetail{}},
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("%s %s: body %q is not JSON: %v", r.Method, r.URL, rec.Body, err)
+		t.Fatalf(
+			"%s %s: body %q is not JSON: %v",
+			r.Method,
+			r.URL,
+			rec.Body,
+			err,
+		)
 	}
 	return got
 }
@@ -107,25 +140,85 @@ func TestBadRequestsNeverReachRunner(t *testing.T) {
 		wantCode   string
 		wantWrite  wire.WriteState
 	}{
-		{name: "unknown route", method: "GET", target: "/status", wantStatus: 404, wantCode: wire.CodeNotFound},
-		{name: "unknown command", method: "POST", target: "/commands/trade", body: `{}`, wantStatus: 404, wantCode: wire.CodeNotFound},
-		{name: "GET on a command", method: "GET", target: "/commands/swap", wantStatus: 405, wantCode: wire.CodeMethodNotAllowed, wantWrite: wire.WriteStateNotSent},
-		{name: "query string", method: "POST", target: "/commands/swap?position=3", body: `{"position":3}`, wantStatus: 400, wantCode: wire.CodeInvalidRequest, wantWrite: wire.WriteStateNotSent},
-		{name: "valid JSON over max_body_bytes", method: "POST", target: "/commands/swap", body: `{"position":` + strings.Repeat(" ", 300) + `3}`, wantStatus: 413, wantCode: wire.CodeRequestTooLarge, wantWrite: wire.WriteStateNotSent},
-		{name: "missing position", method: "POST", target: "/commands/swap", body: `{}`, wantStatus: 400, wantCode: wire.CodeInvalidRequest, wantWrite: wire.WriteStateNotSent},
+		{
+			name:       "unknown route",
+			method:     "GET",
+			target:     "/status",
+			wantStatus: 404,
+			wantCode:   wire.CodeNotFound,
+		},
+		{
+			name:       "unknown command",
+			method:     "POST",
+			target:     "/commands/trade",
+			body:       `{}`,
+			wantStatus: 404,
+			wantCode:   wire.CodeNotFound,
+		},
+		{
+			name:       "GET on a command",
+			method:     "GET",
+			target:     "/commands/swap",
+			wantStatus: 405,
+			wantCode:   wire.CodeMethodNotAllowed,
+			wantWrite:  wire.WriteStateNotSent,
+		},
+		{
+			name:       "query string",
+			method:     "POST",
+			target:     "/commands/swap?position=3",
+			body:       `{"position":3}`,
+			wantStatus: 400,
+			wantCode:   wire.CodeInvalidRequest,
+			wantWrite:  wire.WriteStateNotSent,
+		},
+		{
+			name:       "valid JSON over max_body_bytes",
+			method:     "POST",
+			target:     "/commands/swap",
+			body:       `{"position":` + strings.Repeat(" ", 300) + `3}`,
+			wantStatus: 413,
+			wantCode:   wire.CodeRequestTooLarge,
+			wantWrite:  wire.WriteStateNotSent,
+		},
+		{
+			name:       "missing position",
+			method:     "POST",
+			target:     "/commands/swap",
+			body:       `{}`,
+			wantStatus: 400,
+			wantCode:   wire.CodeInvalidRequest,
+			wantWrite:  wire.WriteStateNotSent,
+		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest(tt.method, tt.target, strings.NewReader(tt.body))
-			r.Header.Set("Neurokit-Spec", "1")
+		t.Run(
+			tt.name,
+			func(t *testing.T) {
+				r := httptest.NewRequest(
+					tt.method,
+					tt.target,
+					strings.NewReader(tt.body),
+				)
+				r.Header.Set("Neurokit-Spec", "1")
 
-			got := serveAndDecode(t, srv, r)
+				got := serveAndDecode(t, srv, r)
 
-			if got.status != tt.wantStatus || got.Error.Code != tt.wantCode || got.Write != tt.wantWrite || got.Error.RequestID == "" {
-				t.Errorf("%s %s = %d %+v, write %q; want %d %s with a request ID, write %q",
-					tt.method, tt.target, got.status, got.Error, got.Write, tt.wantStatus, tt.wantCode, tt.wantWrite)
-			}
-		})
+				if got.status != tt.wantStatus || got.Error.Code != tt.wantCode || got.Write != tt.wantWrite || got.Error.RequestID == "" {
+					t.Errorf(
+						"%s %s = %d %+v, write %q; want %d %s with a request ID, write %q",
+						tt.method,
+						tt.target,
+						got.status,
+						got.Error,
+						got.Write,
+						tt.wantStatus,
+						tt.wantCode,
+						tt.wantWrite,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -138,24 +231,44 @@ func TestSpecMismatchRejectedBeforeRunner(t *testing.T) {
 		name string
 		spec string
 	}{
-		{name: "client on spec 2", spec: "2"},
-		{name: "missing header", spec: ""},
+		{
+			name: "client on spec 2",
+			spec: "2",
+		},
+		{
+			name: "missing header",
+			spec: "",
+		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "/commands/swap", strings.NewReader("null"))
-			if tt.spec != "" {
-				r.Header.Set("Neurokit-Spec", tt.spec)
-			}
+		t.Run(
+			tt.name,
+			func(t *testing.T) {
+				r := httptest.NewRequest(
+					http.MethodPost,
+					"/commands/swap",
+					strings.NewReader("null"),
+				)
+				if tt.spec != "" {
+					r.Header.Set("Neurokit-Spec", tt.spec)
+				}
 
-			got := serveAndDecode(t, srv, r)
+				got := serveAndDecode(t, srv, r)
 
-			messageNamesBothSpecs := strings.Contains(got.Error.Message, `"`+tt.spec+`"`) && strings.Contains(got.Error.Message, "spec 1")
-			if got.status != 400 || got.Error.Code != wire.CodeSpecMismatch || got.Write != wire.WriteStateNotSent || !messageNamesBothSpecs {
-				t.Errorf("Neurokit-Spec %q = %d %+v, write %q; want 400 spec-mismatch naming %q and spec 1, write not-sent",
-					tt.spec, got.status, got.Error, got.Write, tt.spec)
-			}
-		})
+				messageNamesBothSpecs := strings.Contains(got.Error.Message, `"`+tt.spec+`"`) &&
+					strings.Contains(got.Error.Message, "spec 1")
+				if got.status != 400 || got.Error.Code != wire.CodeSpecMismatch || got.Write != wire.WriteStateNotSent || !messageNamesBothSpecs {
+					t.Errorf(
+						"Neurokit-Spec %q = %d %+v, write %q; want 400 spec-mismatch naming %q and spec 1, write not-sent",
+						tt.spec,
+						got.status,
+						got.Error,
+						got.Write,
+						tt.spec,
+					)
+				}
+			},
+		)
 	}
 }
 
@@ -163,19 +276,34 @@ func TestSpecMismatchRejectedBeforeRunner(t *testing.T) {
 // The handler crashes here because a failed mutation must be audited too.
 func TestApprovalLabelAuditedNotPassed(t *testing.T) {
 	var stdin []byte
-	srv, log := newTestServer(t, testManifest, func(_ context.Context, job broker.Job) broker.RunResult {
-		stdin = job.Stdin
-		return broker.RunResult{ExitCode: -1}
-	})
+	srv, log := newTestServer(
+		t,
+		testManifest,
+		func(_ context.Context, job broker.Job) broker.RunResult {
+			stdin = job.Stdin
+			return broker.RunResult{ExitCode: -1}
+		},
+	)
 
-	got := serveAndDecode(t, srv, newCommandRequest("swap", `{"position":3,"approval":"policy:fantasy-autofix"}`))
+	got := serveAndDecode(
+		t,
+		srv,
+		newCommandRequest("swap", `{"position":3,"approval":"policy:fantasy-autofix"}`),
+	)
 
 	if got.status != 502 || string(stdin) != `{"position":3}` {
-		t.Errorf("status %d, handler stdin %s; want 502 and stdin {\"position\":3}", got.status, stdin)
+		t.Errorf(
+			"status %d, handler stdin %s; want 502 and stdin {\"position\":3}",
+			got.status,
+			stdin,
+		)
 	}
 	audit := findLogEntry(t, log, "audit")
 	if audit["approval"] != "policy:fantasy-autofix" || audit["code"] != wire.CodeChangeUnknown {
-		t.Errorf("audit log entry %v; want approval policy:fantasy-autofix and code change-unknown", audit)
+		t.Errorf(
+			"audit log entry %v; want approval policy:fantasy-autofix and code change-unknown",
+			audit,
+		)
 	}
 }
 
@@ -185,28 +313,41 @@ func TestApprovalLabelAuditedNotPassed(t *testing.T) {
 func TestQueuedMutationPastDeadlineNotSent(t *testing.T) {
 	lookupRunning := make(chan struct{})
 	releaseLookup := make(chan struct{})
-	srv, _ := newTestServer(t, shortDeadlines, func(_ context.Context, job broker.Job) broker.RunResult {
-		if job.Command == "swap" {
-			// Only the retry, after releaseLookup closes, may run.
+	srv, _ := newTestServer(
+		t,
+		shortDeadlines,
+		func(_ context.Context, job broker.Job) broker.RunResult {
+			if job.Command == "swap" {
+				// Only the retry, after releaseLookup closes, may run.
+				select {
+				case <-releaseLookup:
+					return broker.RunResult{
+						ExitCode: 0,
+						Answer:   []byte(`{"result":1,"write":"verified"}`),
+					}
+				default:
+					t.Error("the swap ran after its deadline passed")
+					return broker.RunResult{}
+				}
+			}
+			close(lookupRunning)
 			select {
 			case <-releaseLookup:
-				return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1,"write":"verified"}`)}
-			default:
-				t.Error("the swap ran after its deadline passed")
-				return broker.RunResult{}
+			case <-time.After(time.Second):
 			}
-		}
-		close(lookupRunning)
-		select {
-		case <-releaseLookup:
-		case <-time.After(time.Second):
-		}
-		return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1}`)}
-	})
+			return broker.RunResult{
+				ExitCode: 0,
+				Answer:   []byte(`{"result":1}`),
+			}
+		},
+	)
 	// 1. A lookup takes one of the two slots.
 	lookupDone := make(chan struct{})
 	go func() {
-		srv.ServeHTTP(httptest.NewRecorder(), newCommandRequest("lookup", validBody["lookup"]))
+		srv.ServeHTTP(
+			httptest.NewRecorder(),
+			newCommandRequest("lookup", validBody["lookup"]),
+		)
 		close(lookupDone)
 	}()
 	<-lookupRunning
@@ -216,13 +357,26 @@ func TestQueuedMutationPastDeadlineNotSent(t *testing.T) {
 	// 3. With the lookup done, a new swap must get every slot.
 	close(releaseLookup)
 	<-lookupDone
-	retry := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]))
+	retry := serveAndDecode(
+		t,
+		srv,
+		newCommandRequest("swap", validBody["swap"]),
+	)
 
 	if got.status != 504 || got.Error.Code != wire.CodeDeadlineExceeded || got.Write != wire.WriteStateNotSent {
-		t.Errorf("queued swap = %d %+v, write %q; want 504 deadline-exceeded, write not-sent", got.status, got.Error, got.Write)
+		t.Errorf(
+			"queued swap = %d %+v, write %q; want 504 deadline-exceeded, write not-sent",
+			got.status,
+			got.Error,
+			got.Write,
+		)
 	}
 	if retry.status != 200 {
-		t.Errorf("swap after the lookup finished = %d %+v; want 200, with no slot kept by the timed-out swap", retry.status, retry.Error)
+		t.Errorf(
+			"swap after the lookup finished = %d %+v; want 200, with no slot kept by the timed-out swap",
+			retry.status,
+			retry.Error,
+		)
 	}
 }
 
@@ -232,22 +386,32 @@ func TestWriteLockAndSlotsBoundConcurrency(t *testing.T) {
 	var mu sync.Mutex
 	running := map[string]int{}
 	peak, writeOverlapped := 0, false
-	srv, _ := newTestServer(t, testManifest, func(_ context.Context, job broker.Job) broker.RunResult {
-		mu.Lock()
-		running[job.Command]++
-		total := running["lookup"] + running["swap"]
-		peak = max(peak, total)
-		writeOverlapped = writeOverlapped || (running["swap"] > 0 && total > 1)
-		mu.Unlock()
-		time.Sleep(10 * time.Millisecond) // long enough for other requests to arrive
-		mu.Lock()
-		running[job.Command]--
-		mu.Unlock()
-		if job.Mutating {
-			return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1,"write":"verified"}`)}
-		}
-		return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1}`)}
-	})
+	srv, _ := newTestServer(
+		t,
+		testManifest,
+		func(_ context.Context, job broker.Job) broker.RunResult {
+			mu.Lock()
+			running[job.Command]++
+			total := running["lookup"] + running["swap"]
+			peak = max(peak, total)
+			writeOverlapped = writeOverlapped || (running["swap"] > 0 && total > 1)
+			mu.Unlock()
+			time.Sleep(10 * time.Millisecond) // long enough for other requests to arrive
+			mu.Lock()
+			running[job.Command]--
+			mu.Unlock()
+			if job.Mutating {
+				return broker.RunResult{
+					ExitCode: 0,
+					Answer:   []byte(`{"result":1,"write":"verified"}`),
+				}
+			}
+			return broker.RunResult{
+				ExitCode: 0,
+				Answer:   []byte(`{"result":1}`),
+			}
+		},
+	)
 
 	var wg sync.WaitGroup
 	for i := range 12 {
@@ -266,21 +430,34 @@ func TestWriteLockAndSlotsBoundConcurrency(t *testing.T) {
 	wg.Wait()
 
 	if peak > 2 || writeOverlapped {
-		t.Errorf("peak %d handlers, write overlapped another: %t; want at most 2, and a write alone", peak, writeOverlapped)
+		t.Errorf(
+			"peak %d handlers, write overlapped another: %t; want at most 2, and a write alone",
+			peak,
+			writeOverlapped,
+		)
 	}
 }
 
 // A bug in the runner must not drop a mutation's reply and audit log entry,
 // because its caller has to know the change may have happened.
 func TestRunnerPanicRepliesChangeUnknown(t *testing.T) {
-	srv, log := newTestServer(t, testManifest, func(context.Context, broker.Job) broker.RunResult {
-		panic("runner bug")
-	})
+	srv, log := newTestServer(
+		t,
+		testManifest,
+		func(context.Context, broker.Job) broker.RunResult {
+			panic("runner bug")
+		},
+	)
 
 	got := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]))
 
 	if got.status != 502 || got.Error.Code != wire.CodeChangeUnknown || got.Write != wire.WriteStateUnknown {
-		t.Errorf("swap = %d %+v, write %q; want 502 change-unknown, write unknown", got.status, got.Error, got.Write)
+		t.Errorf(
+			"swap = %d %+v, write %q; want 502 change-unknown, write unknown",
+			got.status,
+			got.Error,
+			got.Write,
+		)
 	}
 	if audit := findLogEntry(t, log, "audit"); audit["code"] != wire.CodeChangeUnknown {
 		t.Errorf("audit log entry %v; want code change-unknown", audit)
@@ -297,39 +474,69 @@ func TestHangUpDropsQueuedNotRunning(t *testing.T) {
 	defer hangUpRunningSwap()
 	var runErr error
 	var runDeadline time.Time
-	srv, _ := newTestServer(t, testManifest, func(ctx context.Context, job broker.Job) broker.RunResult {
-		if job.Command == "lookup" {
-			close(lookupRunning)
-			<-releaseLookup
-			return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1}`)}
-		}
-		swapsRun++
-		hangUpRunningSwap()
-		runDeadline, _ = ctx.Deadline()
-		runErr = ctx.Err()
-		return broker.RunResult{ExitCode: 0, Answer: []byte(`{"result":1,"write":"verified"}`)}
-	})
+	srv, _ := newTestServer(
+		t,
+		testManifest,
+		func(ctx context.Context, job broker.Job) broker.RunResult {
+			if job.Command == "lookup" {
+				close(lookupRunning)
+				<-releaseLookup
+				return broker.RunResult{
+					ExitCode: 0,
+					Answer:   []byte(`{"result":1}`),
+				}
+			}
+			swapsRun++
+			hangUpRunningSwap()
+			runDeadline, _ = ctx.Deadline()
+			runErr = ctx.Err()
+			return broker.RunResult{
+				ExitCode: 0,
+				Answer:   []byte(`{"result":1,"write":"verified"}`),
+			}
+		},
+	)
 	// 1. A lookup takes one of the two slots, so a swap, which needs both, waits.
-	go srv.ServeHTTP(httptest.NewRecorder(), newCommandRequest("lookup", validBody["lookup"]))
+	go srv.ServeHTTP(
+		httptest.NewRecorder(),
+		newCommandRequest("lookup", validBody["lookup"]),
+	)
 	<-lookupRunning
 
 	// 2. The waiting swap's client hangs up.
 	ctx, hangUp := context.WithCancel(context.Background())
 	time.AfterFunc(20*time.Millisecond, hangUp)
-	queued := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]).WithContext(ctx))
+	queued := serveAndDecode(
+		t,
+		srv,
+		newCommandRequest("swap", validBody["swap"]).WithContext(ctx),
+	)
 	swapsRunWhileQueued := swapsRun
 	// 3. A new swap waits 50 ms for the lookup, then its client hangs up while
 	// its handler runs.
 	sent := time.Now()
 	time.AfterFunc(50*time.Millisecond, func() { close(releaseLookup) })
-	running := serveAndDecode(t, srv, newCommandRequest("swap", validBody["swap"]).WithContext(runningSwap))
+	running := serveAndDecode(
+		t,
+		srv,
+		newCommandRequest("swap", validBody["swap"]).WithContext(runningSwap),
+	)
 
 	if queued.status != 503 || queued.Error.Code != wire.CodeNotReady || queued.Write != wire.WriteStateNotSent || swapsRunWhileQueued != 0 {
-		t.Errorf("queued swap = %d %+v, write %q, %d run; want 503 not-ready, write not-sent, none run",
-			queued.status, queued.Error, queued.Write, swapsRunWhileQueued)
+		t.Errorf(
+			"queued swap = %d %+v, write %q, %d run; want 503 not-ready, write not-sent, none run",
+			queued.status,
+			queued.Error,
+			queued.Write,
+			swapsRunWhileQueued,
+		)
 	}
 	if running.status != 200 || runErr != nil || runDeadline.IsZero() || runDeadline.Sub(sent) > 5*time.Second+25*time.Millisecond {
-		t.Errorf("running swap = %d, handler context error %v, deadline %v after sending; want 200, no error, the 5 s set on arrival",
-			running.status, runErr, runDeadline.Sub(sent))
+		t.Errorf(
+			"running swap = %d, handler context error %v, deadline %v after sending; want 200, no error, the 5 s set on arrival",
+			running.status,
+			runErr,
+			runDeadline.Sub(sent),
+		)
 	}
 }
