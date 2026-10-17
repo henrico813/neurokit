@@ -20,9 +20,15 @@ func main() {
 	}
 	// docker stop sends SIGTERM, and Ctrl-C in a terminal sends an interrupt;
 	// both stop serve the same way.
-	stop, _ := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	stop, _ := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGTERM,
+		os.Interrupt,
+	)
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	listen := func() (net.Listener, error) { return net.Listen("tcp", "0.0.0.0:8080") }
+	listen := func() (net.Listener, error) {
+		return net.Listen("tcp", "0.0.0.0:8080")
+	}
 	if err := serveBroker(stop, os.Args[2], listen, log); err != nil {
 		fmt.Fprintln(os.Stderr, "neurokit serve:", err)
 		os.Exit(1)

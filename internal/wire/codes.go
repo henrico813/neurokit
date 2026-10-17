@@ -1,6 +1,7 @@
 // Package wire defines what crosses HTTP between the neurokit client and a
-// broker, and what a handler writes on fd 3: the error body, the shared codes
-// and their HTTP statuses, the write outcome, and strict JSON decoding.
+// broker, and what a handler writes on the answer pipe: the routes and spec
+// header, the reply body, the shared codes and their HTTP statuses, the write
+// outcome, and strict JSON decoding.
 package wire
 
 import "net/http"
@@ -24,7 +25,6 @@ const (
 
 const DeclaredCodeStatus = http.StatusUnprocessableEntity
 
-// statuses maps each shared code to the HTTP status the broker sends with it.
 var statuses = map[string]int{
 	CodeInvalidRequest:      http.StatusBadRequest,
 	CodeForbidden:           http.StatusForbidden,
@@ -54,11 +54,6 @@ func LookupHTTPStatus(code string) int {
 		return status
 	}
 	return DeclaredCodeStatus
-}
-
-type ErrorBody struct {
-	Error      ErrorDetail `json:"error"`
-	WriteState WriteState  `json:"write,omitempty"`
 }
 
 type ErrorDetail struct {

@@ -60,9 +60,11 @@ func Run(ctx context.Context, p Process) Result {
 	// Pass the pipes as files, not readers or writers, so Wait does not also
 	// wait for a leftover child that still holds one.
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinR, stdoutW, stderrW
-	cmd.ExtraFiles = []*os.File{answerW} // the handler sees the answer pipe as fd 3
+	cmd.ExtraFiles = []*os.File{answerW} // the handler sees it as file 3, after stdin, stdout and stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
 	cmd.WaitDelay = GracePeriod
 	err = cmd.Start()
 	// The child has its own copies now, and a read ends only once every copy
@@ -84,8 +86,24 @@ func Run(ctx context.Context, p Process) Result {
 		// A handler that writes past the cap gets a write error instead of blocking.
 		answerR.Close()
 	})
-	readers.Go(func() { logHandlerLines(stdoutR, "stdout", p.Log, &outputLeft, &outputDropped) })
-	readers.Go(func() { lastStderrLine = logHandlerLines(stderrR, "stderr", p.Log, &outputLeft, &outputDropped) })
+	readers.Go(func() {
+		logHandlerLines(
+			stdoutR,
+			"stdout",
+			p.Log,
+			&outputLeft,
+			&outputDropped,
+		)
+	})
+	readers.Go(func() {
+		lastStderrLine = logHandlerLines(
+			stderrR,
+			"stderr",
+			p.Log,
+			&outputLeft,
+			&outputDropped,
+		)
+	})
 	// Not waited for: closing stdinW below ends the write if the handler never
 	// reads its stdin.
 	go func() {
@@ -105,19 +123,32 @@ func Run(ctx context.Context, p Process) Result {
 	select {
 	case <-drained:
 	case <-time.After(drainLimit):
-		p.Log.Warn("handler_pipe_held", "detail", "a process outside the handler's group still holds a pipe")
+		p.Log.Warn(
+			"handler_pipe_held",
+			"error", "a process outside the handler's group still holds a pipe",
+		)
 	}
 	closeFiles(stdinW, stdoutR, stderrR, answerR)
 	<-drained
 	if dropped := outputDropped.Load(); dropped > 0 {
 		p.Log.Warn("handler_output_dropped", "bytes", dropped)
 	}
-	return Result{ExitCode: cmd.ProcessState.ExitCode(), Answer: answer, LastStderrLine: lastStderrLine}
+	return Result{
+		ExitCode:       cmd.ProcessState.ExitCode(),
+		Answer:         answer,
+		LastStderrLine: lastStderrLine,
+	}
 }
 
 // Logs lines until the run's output cap is spent, then only counts them.
 // Returns the last line, because a failing program's reason usually comes last.
-func logHandlerLines(r io.Reader, stream string, log *slog.Logger, left, dropped *atomic.Int64) (lastLine string) {
+func logHandlerLines(
+	r io.Reader,
+	stream string,
+	log *slog.Logger,
+	left,
+	dropped *atomic.Int64,
+) (lastLine string) {
 	lines := bufio.NewReaderSize(r, 4096)
 	for {
 		// A line longer than the buffer is logged in pieces.
@@ -156,5 +187,8 @@ func closeFiles(files ...*os.File) {
 
 func reportStartFailure(log *slog.Logger, err error) Result {
 	log.Error("handler_start_failed", "error", err)
-	return Result{ExitCode: -1, LastStderrLine: err.Error()}
+	return Result{
+		ExitCode:       -1,
+		LastStderrLine: err.Error(),
+	}
 }

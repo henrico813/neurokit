@@ -9,9 +9,8 @@ import (
 
 const internalPath = "github.com/henrico813/neurokit/internal/"
 
-// allowedImports lists the internal packages each internal package may
-// import. go test runs in internal/, so "./..." never reaches cmd/neurokit,
-// which may import anything.
+// The internal packages each internal package may import. go test runs in
+// internal/, so "./..." never reaches cmd/neurokit, which may import anything.
 var allowedImports = map[string][]string{
 	"wire":     {},
 	"manifest": {"wire"},

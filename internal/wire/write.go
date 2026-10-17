@@ -43,11 +43,10 @@ func (ws *WriteState) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// In cases where the write status is missing or unknown, or contradicts
-// the error code, this function marks the change as unknown. This function
-// prevents outputs like "success" + "WriteStateUnknown" and
-// "provider-rejected" + "WriteStateUnknown" and replaces them with
-// "change-unknown" + "WriteStateUnknown".
+// Returns change-unknown with write unknown when code and writeState do not
+// show whether the change happened, such as a success that was only sent;
+// otherwise returns them unchanged. Callers retry not-sent and trust
+// verified, so neither may be a guess.
 func MarkUnclearChangeAsUnknown(
 	code string,
 	writeState WriteState,

@@ -34,12 +34,26 @@ const testManifest = `{
 
 // Writes the manifest and handler.sh into a new folder, with DIR in either
 // replaced by that folder.
-func writeTool(t *testing.T, manifestText, handlerScript string) (manifestPath, dir string) {
+func writeTool(
+	t *testing.T,
+	manifestText,
+	handlerScript string,
+) (
+	manifestPath,
+	dir string,
+) {
 	t.Helper()
 	dir = t.TempDir()
 	manifestPath = filepath.Join(dir, "manifest.json")
-	for path, text := range map[string]string{manifestPath: manifestText, filepath.Join(dir, "handler.sh"): handlerScript} {
-		if err := os.WriteFile(path, []byte(strings.ReplaceAll(text, "DIR", dir)), 0o644); err != nil {
+	for path, text := range map[string]string{
+		manifestPath:                     manifestText,
+		filepath.Join(dir, "handler.sh"): handlerScript,
+	} {
+		if err := os.WriteFile(
+			path,
+			[]byte(strings.ReplaceAll(text, "DIR", dir)),
+			0o644,
+		); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -48,7 +62,14 @@ func writeTool(t *testing.T, manifestText, handlerScript string) (manifestPath, 
 
 // Starts serve in this process on a free local port. stopServe does what
 // SIGTERM does and returns serve's error; read log only after it returns.
-func startServe(t *testing.T, manifestPath string) (url string, stopServe func() error, log *bytes.Buffer) {
+func startServe(
+	t *testing.T,
+	manifestPath string,
+) (
+	url string,
+	stopServe func() error,
+	log *bytes.Buffer,
+) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -60,7 +81,12 @@ func startServe(t *testing.T, manifestPath string) (url string, stopServe func()
 	served := make(chan error, 1)
 	go func() {
 		listen := func() (net.Listener, error) { return ln, nil }
-		served <- serveBroker(stop, manifestPath, listen, slog.New(slog.NewJSONHandler(log, nil)))
+		served <- serveBroker(
+			stop,
+			manifestPath,
+			listen,
+			slog.New(slog.NewJSONHandler(log, nil)),
+		)
 	}()
 	stopServe = sync.OnceValue(func() error {
 		// Go's client sometimes opens a spare connection that sends nothing,
@@ -75,12 +101,14 @@ func startServe(t *testing.T, manifestPath string) (url string, stopServe func()
 
 type reply struct {
 	status int
-	Error  wire.ErrorDetail `json:"error"`
-	Write  wire.WriteState  `json:"write"`
+	wire.Reply
 }
 
 func postCommand(t *testing.T, url, command string, body io.Reader) reply {
 	t.Helper()
+	// A success reply has no error, so this empty one lets tests read Error.Code
+	// on any reply.
+	got := reply{Reply: wire.Reply{Error: &wire.ErrorDetail{}}}
 	r, err := http.NewRequest(http.MethodPost, url+"/commands/"+command, body)
 	if err != nil {
 		t.Fatal(err)
@@ -89,10 +117,10 @@ func postCommand(t *testing.T, url, command string, body io.Reader) reply {
 	resp, err := http.DefaultClient.Do(r)
 	if err != nil {
 		t.Errorf("POST %s: %v", command, err)
-		return reply{}
+		return got
 	}
 	defer resp.Body.Close()
-	got := reply{status: resp.StatusCode}
+	got.status = resp.StatusCode
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 		t.Errorf("POST %s: reply is not JSON: %v", command, err)
 	}
@@ -113,15 +141,29 @@ func waitForFile(t *testing.T, path string) {
 // A broker missing a secret must not serve, and must say why in one line
 // instead of restarting over and over with no reason shown.
 func TestServeStopsWhenCheckFails(t *testing.T) {
-	failingCheck := strings.Replace(testManifest, `"check": ["true"]`,
-		`"check": ["sh", "-c", "echo starting; echo 'GEMINI_API_KEY is required' >&2; exit 1"]`, 1)
+	failingCheck := strings.Replace(
+		testManifest,
+		`"check": ["true"]`,
+		`"check": ["sh", "-c", "echo starting; echo 'GEMINI_API_KEY is required' >&2; exit 1"]`,
+		1,
+	)
 	manifestPath, _ := writeTool(t, failingCheck, "")
-	listen := func() (net.Listener, error) { return nil, errors.New("serve listened") }
+	listen := func() (net.Listener, error) {
+		return nil, errors.New("serve listened")
+	}
 
-	err := serveBroker(context.Background(), manifestPath, listen, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	err := serveBroker(
+		context.Background(),
+		manifestPath,
+		listen,
+		slog.New(slog.NewJSONHandler(io.Discard, nil)),
+	)
 
 	if err == nil || err.Error() != "check failed: GEMINI_API_KEY is required" {
-		t.Errorf("serve returned %v; want \"check failed: GEMINI_API_KEY is required\", before listening", err)
+		t.Errorf(
+			"serve returned %v; want \"check failed: GEMINI_API_KEY is required\", before listening",
+			err,
+		)
 	}
 }
 
@@ -129,7 +171,12 @@ func TestServeStopsWhenCheckFails(t *testing.T) {
 // while a secret is missing. Most tools have no ready program, and then it
 // must pass.
 func TestReadyzRunsReadyProgram(t *testing.T) {
-	withReady := strings.Replace(testManifest, `"check": ["true"]`, `"check": ["true"], "ready": ["test", "-r", "DIR/secret"]`, 1)
+	withReady := strings.Replace(
+		testManifest,
+		`"check": ["true"]`,
+		`"check": ["true"], "ready": ["test", "-r", "DIR/secret"]`,
+		1,
+	)
 	readyPath, dir := writeTool(t, withReady, "")
 	noReadyPath, _ := writeTool(t, testManifest, "")
 	readyURL, _, _ := startServe(t, readyPath)
@@ -144,28 +191,56 @@ func TestReadyzRunsReadyProgram(t *testing.T) {
 		return resp.StatusCode
 	}
 	withoutSecret := readyStatus(readyURL)
-	if err := os.WriteFile(filepath.Join(dir, "secret"), nil, 0o600); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(dir, "secret"),
+		nil,
+		0o600,
+	); err != nil {
 		t.Fatal(err)
 	}
 	withSecret := readyStatus(readyURL)
 	withoutReady := readyStatus(noReadyURL)
 
 	if withoutSecret != 503 || withSecret != 200 || withoutReady != 200 {
-		t.Errorf("/readyz = %d without the secret, %d with it, %d with no ready program; want 503, 200, 200",
-			withoutSecret, withSecret, withoutReady)
+		t.Errorf(
+			"/readyz = %d without the secret, %d with it, %d with no ready program; want 503, 200, 200",
+			withoutSecret,
+			withSecret,
+			withoutReady,
+		)
 	}
 }
 
 // On stop, a running change must report that it may have happened, a waiting
 // one must never run, and serve must exit soon, but only after both replies.
 func TestSigtermStopsHandlersAndQueue(t *testing.T) {
-	manifestPath, dir := writeTool(t, testManifest, `touch DIR/started; sleep 30`)
+	// The handler ignores SIGTERM, so it is killed only at the end of the grace
+	// period, and serve must still wait for its reply.
+	manifestPath, dir := writeTool(
+		t,
+		testManifest,
+		`trap '' TERM; touch DIR/started; sleep 30`,
+	)
 	url, stopServe, log := startServe(t, manifestPath)
 	running, queued := make(chan reply), make(chan reply)
-	go func() { running <- postCommand(t, url, "swap", strings.NewReader(`{"position":3}`)) }()
+	go func() {
+		running <- postCommand(
+			t,
+			url,
+			"swap",
+			strings.NewReader(`{"position":3}`),
+		)
+	}()
 	waitForFile(t, filepath.Join(dir, "started"))
 	// A swap runs alone, so the second one waits for the first.
-	go func() { queued <- postCommand(t, url, "swap", strings.NewReader(`{"position":4}`)) }()
+	go func() {
+		queued <- postCommand(
+			t,
+			url,
+			"swap",
+			strings.NewReader(`{"position":4}`),
+		)
+	}()
 	time.Sleep(100 * time.Millisecond) // so serve accepts the waiting request's connection before it stops listening
 
 	start := time.Now()
@@ -174,14 +249,28 @@ func TestSigtermStopsHandlersAndQueue(t *testing.T) {
 	repliesWritten := strings.Count(log.String(), `"path":"/commands/swap"`)
 
 	if got := <-running; got.status != 502 || got.Error.Code != wire.CodeChangeUnknown || got.Write != wire.WriteStateUnknown {
-		t.Errorf("running swap = %d %+v, write %q; want 502 change-unknown, write unknown", got.status, got.Error, got.Write)
+		t.Errorf(
+			"running swap = %d %+v, write %q; want 502 change-unknown, write unknown",
+			got.status,
+			got.Error,
+			got.Write,
+		)
 	}
 	if got := <-queued; got.status != 503 || got.Error.Code != wire.CodeNotReady || got.Write != wire.WriteStateNotSent {
-		t.Errorf("queued swap = %d %+v, write %q; want 503 not-ready, write not-sent", got.status, got.Error, got.Write)
+		t.Errorf(
+			"queued swap = %d %+v, write %q; want 503 not-ready, write not-sent",
+			got.status,
+			got.Error,
+			got.Write,
+		)
 	}
 	if err != nil || elapsed >= runner.GracePeriod+time.Second || repliesWritten != 2 {
-		t.Errorf("serve returned %v after %v, with %d replies written; want nil within the grace period plus 1 s, after both",
-			err, elapsed, repliesWritten)
+		t.Errorf(
+			"serve returned %v after %v, with %d replies written; want nil within the grace period plus 1 s, after both",
+			err,
+			elapsed,
+			repliesWritten,
+		)
 	}
 }
 
@@ -189,8 +278,16 @@ func TestSigtermStopsHandlersAndQueue(t *testing.T) {
 // slow client loses the reply to a change that was made, and must then report
 // that it does not know whether the change happened.
 func TestSlowBodyStillGetsReply(t *testing.T) {
-	shortDeadlines := strings.ReplaceAll(testManifest, `"deadline_ms": 5000`, `"deadline_ms": 500`)
-	manifestPath, _ := writeTool(t, shortDeadlines, `echo '{"result":"swapped","write":"verified"}' >&3`)
+	shortDeadlines := strings.ReplaceAll(
+		testManifest,
+		`"deadline_ms": 5000`,
+		`"deadline_ms": 500`,
+	)
+	manifestPath, _ := writeTool(
+		t,
+		shortDeadlines,
+		`echo '{"result":"swapped","write":"verified"}' >&3`,
+	)
 	url, _, _ := startServe(t, manifestPath)
 	body, sendBody := io.Pipe()
 	go func() {
@@ -204,7 +301,12 @@ func TestSlowBodyStillGetsReply(t *testing.T) {
 	got := postCommand(t, url, "swap", body)
 
 	if got.status != 200 || got.Write != wire.WriteStateVerified {
-		t.Errorf("swap = %d %+v, write %q; want 200, write verified", got.status, got.Error, got.Write)
+		t.Errorf(
+			"swap = %d %+v, write %q; want 200, write verified",
+			got.status,
+			got.Error,
+			got.Write,
+		)
 	}
 }
 
@@ -212,9 +314,13 @@ func TestSlowBodyStillGetsReply(t *testing.T) {
 // Handlers learn the command, whether it may change anything and how long
 // they have only from the NEUROKIT_ variables.
 func TestRequestIDReachesHandlerAndLogs(t *testing.T) {
-	manifestPath, _ := writeTool(t, testManifest, `echo "$NEUROKIT_COMMAND $NEUROKIT_REQUEST_ID $NEUROKIT_MUTATING $NEUROKIT_DEADLINE_MS"
+	manifestPath, _ := writeTool(
+		t,
+		testManifest,
+		`echo "$NEUROKIT_COMMAND $NEUROKIT_REQUEST_ID $NEUROKIT_MUTATING $NEUROKIT_DEADLINE_MS"
 		echo '{"error":{"code":"provider-unavailable","message":"down"}}' >&3
-		exit 1`)
+		exit 1`,
+	)
 	url, stopServe, log := startServe(t, manifestPath)
 
 	got := postCommand(t, url, "lookup", strings.NewReader(`{"query":"kim"}`))
@@ -234,10 +340,19 @@ func TestRequestIDReachesHandlerAndLogs(t *testing.T) {
 	var deadlineMS int
 	fmt.Sscan(entry.Line, &command, &requestID, &mutating, &deadlineMS)
 	if got.Error.Code != wire.CodeProviderUnavailable || entry.RequestID != got.Error.RequestID || entry.Command != "lookup" {
-		t.Errorf("reply %+v, handler_output entry %+v; want provider-unavailable, and the entry naming the reply's request ID and lookup", got.Error, entry)
+		t.Errorf(
+			"reply %+v, handler_output entry %+v; want provider-unavailable, and the entry naming the reply's request ID and lookup",
+			got.Error,
+			entry,
+		)
 	}
 	if command != "lookup" || requestID != got.Error.RequestID || mutating != "0" || deadlineMS <= 4000 || deadlineMS > 5000 {
-		t.Errorf("handler saw NEUROKIT_COMMAND %q, NEUROKIT_REQUEST_ID %q, NEUROKIT_MUTATING %q, NEUROKIT_DEADLINE_MS %d; want lookup, the reply's request ID, 0, and nearly 5000",
-			command, requestID, mutating, deadlineMS)
+		t.Errorf(
+			"handler saw NEUROKIT_COMMAND %q, NEUROKIT_REQUEST_ID %q, NEUROKIT_MUTATING %q, NEUROKIT_DEADLINE_MS %d; want lookup, the reply's request ID, 0, and nearly 5000",
+			command,
+			requestID,
+			mutating,
+			deadlineMS,
+		)
 	}
 }

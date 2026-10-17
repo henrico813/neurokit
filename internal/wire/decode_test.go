@@ -66,7 +66,7 @@ func TestDecodeRejectsLooseJSON(t *testing.T) {
 		t.Run(
 			tt.name,
 			func(t *testing.T) {
-				var got wire.ErrorBody
+				var got wire.Reply
 
 				err := wire.DecodeOneJSONValue(
 					strings.NewReader(tt.input),

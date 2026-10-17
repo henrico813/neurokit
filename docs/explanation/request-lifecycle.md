@@ -57,7 +57,7 @@ A mutation's reply always says what happened to the change. If the answer leaves
 
 ## The log entries
 
-serve logs JSON lines to stderr: each line the handler printed, an `audit` entry with the approval label, and a `request` entry. They all carry the request ID, as do error replies, so one search finds everything.
+serve logs JSON lines to stderr: each line the handler printed, an `audit` entry with the approval label, and a `request` entry. They all carry the request ID and the command, and error replies carry the request ID too, so one search finds everything.
 
 ## When things go wrong
 

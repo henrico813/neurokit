@@ -6,8 +6,9 @@ import (
 	"github.com/henrico813/neurokit/internal/wire"
 )
 
-// Ensures that MarkUnclearChangeAsUnknown does not return contradictory
-// outputs.
+// Callers retry a not-sent change and trust a verified one, so an unclear
+// pair must become change-unknown. Verification-failed after send and a
+// verified success are clear and stay as they are.
 func TestUnclearChangeBecomesUnknown(t *testing.T) {
 	tests := []struct {
 		name           string

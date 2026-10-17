@@ -16,11 +16,11 @@ var (
 	listItem    = regexp.MustCompile(`^(- |\d+\. )`)
 )
 
-// Pages under docs/ are read on phones, where long paragraphs, wide code
-// lines and tables are hard to follow. The limits apply per line, so each
-// paragraph or list item must stay on one line.
+// The README and pages under docs/ are read on phones, where long
+// paragraphs, wide code lines and tables are hard to follow. The limits
+// apply per line, so each paragraph or list item must stay on one line.
 func TestDocsFitOnAPhone(t *testing.T) {
-	err := filepath.WalkDir("../docs", func(path string, d fs.DirEntry, err error) error {
+	checkPage := func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
 			return err
 		}
@@ -31,7 +31,10 @@ func TestDocsFitOnAPhone(t *testing.T) {
 		inCode, prevProse := false, false
 		for i, line := range strings.Split(string(text), "\n") {
 			at := func(format string, args ...any) {
-				t.Errorf("%s:%d: "+format, append([]any{path, i + 1}, args...)...)
+				t.Errorf(
+					"%s:%d: "+format,
+					append([]any{path, i + 1}, args...)...,
+				)
 			}
 			isProse := !inCode && line != "" && !strings.HasPrefix(line, "```") &&
 				!strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "|")
@@ -41,20 +44,29 @@ func TestDocsFitOnAPhone(t *testing.T) {
 			case strings.HasPrefix(line, "```"):
 				inCode = !inCode
 			case inCode && utf8.RuneCountInString(line) > 50:
-				at("code line has %d characters; limit 50", utf8.RuneCountInString(line))
+				at(
+					"code line has %d characters; limit 50",
+					utf8.RuneCountInString(line),
+				)
 			case strings.HasPrefix(line, "|") && !inCode:
 				at("table; use a list instead")
 			case !isProse:
 			case prevProse && !listItem.MatchString(line):
 				at("paragraph continues from the line above; keep it on one line")
 			case sentences > 3 || words > 60:
-				at("paragraph has %d sentences and %d words; limit 3 and 60", sentences, words)
+				at(
+					"paragraph has %d sentences and %d words; limit 3 and 60",
+					sentences,
+					words,
+				)
 			}
 			prevProse = isProse
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
+	}
+	for _, root := range []string{"../README.md", "../docs"} {
+		if err := filepath.WalkDir(root, checkPage); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

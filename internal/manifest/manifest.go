@@ -21,8 +21,8 @@ import (
 	"github.com/henrico813/neurokit/internal/wire"
 )
 
-// Spec is the only manifest and wire version this binary knows. It changes
-// whenever the manifest format or the HTTP wire changes.
+// The only manifest and wire version this binary knows. It changes whenever
+// the manifest format or the HTTP wire changes.
 const Spec = 1
 
 const maxManifestBytes = 1 << 20
@@ -69,40 +69,59 @@ type Arg struct {
 	Fields    map[string]Arg `json:"fields"`
 }
 
-// Returns the manifest at path only if every command has its limits and no
-// name is reserved. Otherwise returns the first problem as one line, such as
-// `manifest /opt/demo/manifest.json: command "lookup": deadline_ms must be
-// positive`.
-func ReadAndValidate(path string) (*Manifest, error) {
+// Returns the manifest at path, and the bytes it read, only if every command
+// has its limits and no name is reserved. Otherwise returns the first problem
+// as one line, such as `manifest /opt/demo/manifest.json: command "lookup":
+// deadline_ms must be positive`.
+func ReadAndValidate(path string) (*Manifest, []byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer f.Close()
 
 	data, err := io.ReadAll(io.LimitReader(f, maxManifestBytes+1))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	m, err := ParseAndValidate(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("manifest %s: %w", path, err)
+	}
+	return m, data, nil
+}
+
+// Returns the manifest in data only if every command has its limits and no
+// name is reserved. Errors do not name a file; ReadAndValidate adds the path.
+func ParseAndValidate(data []byte) (*Manifest, error) {
 	// Check spec before strict decoding. A newer spec usually adds a field,
 	// and "unknown field" would hide the real reason.
 	var version struct {
 		Spec int `json:"spec"`
 	}
 	if json.Unmarshal(data, &version) == nil && version.Spec != Spec {
-		return nil, fmt.Errorf("manifest %s: spec %d is not supported; this binary knows spec %d", path, version.Spec, Spec)
+		return nil, fmt.Errorf(
+			"spec %d is not supported; this binary knows spec %d",
+			version.Spec,
+			Spec,
+		)
 	}
 	var m Manifest
-	err = wire.DecodeOneJSONValue(bytes.NewReader(data), maxManifestBytes, &m)
+	err := wire.DecodeOneJSONValue(bytes.NewReader(data), maxManifestBytes, &m)
 	if err == nil {
 		err = m.validate()
 	}
 	var typeErr *json.UnmarshalTypeError
 	if errors.As(err, &typeErr) {
-		err = fmt.Errorf("field %q must be %s, not %s", typeErr.Field, typeErr.Type, typeErr.Value)
+		err = fmt.Errorf(
+			"field %q must be %s, not %s",
+			typeErr.Field,
+			typeErr.Type,
+			typeErr.Value,
+		)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("manifest %s: %w", path, err)
+		return nil, err
 	}
 	return &m, nil
 }
@@ -126,8 +145,14 @@ func (m *Manifest) validate() error {
 	// Health checks run every 5 s, so for the scout tool that is about 12%
 	// of a core. The name test catches the common mistake, not every slow
 	// program.
-	if len(m.Ready) > 0 && strings.HasPrefix(filepath.Base(m.Ready[0]), "python") {
-		return fmt.Errorf("ready must be cheap, such as a file test, not %q", m.Ready[0])
+	if len(m.Ready) > 0 && strings.HasPrefix(
+		filepath.Base(m.Ready[0]),
+		"python",
+	) {
+		return fmt.Errorf(
+			"ready must be cheap, such as a file test, not %q",
+			m.Ready[0],
+		)
 	}
 	for _, name := range slices.Sorted(maps.Keys(m.Commands)) {
 		if err := validateCommand(name, m.Commands[name]); err != nil {
@@ -174,7 +199,10 @@ func validateCommand(name string, c *Command) error {
 func validateDeclaredArgs(fields map[string]Arg) error {
 	for _, name := range slices.Sorted(maps.Keys(fields)) {
 		if !argName.MatchString(name) {
-			return fmt.Errorf("argument %q: name must be lowercase letters, digits and underscores", name)
+			return fmt.Errorf(
+				"argument %q: name must be lowercase letters, digits and underscores",
+				name,
+			)
 		}
 		if err := validateArgTypeAndBounds(fields[name]); err != nil {
 			return fmt.Errorf("argument %s: %w", name, err)
