@@ -23,7 +23,11 @@ const testManifest = `{
     "lookup": {"max_body_bytes": 200, "max_response_bytes": 100, "deadline_ms": 100,
       "args": {"query": {"type": "string", "max_length": 20}}},
     "swap": {"mutating": true, "approval": true, "max_body_bytes": 200, "max_response_bytes": 4096, "deadline_ms": 100,
-      "args": {"position": {"type": "integer", "min": 1, "max": 9}}}
+      "args": {"position": {"type": "integer", "min": 1, "max": 9},
+        "slot_ids": {"type": "list", "items": {"type": "integer", "min": 1, "max": 9}, "max_items": 3, "optional": true},
+        "keep_bench": {"type": "boolean", "optional": true},
+        "filter": {"type": "object", "fields": {"team": {"type": "string", "max_length": 9}}, "optional": true},
+        "filters": {"type": "list", "items": {"type": "object", "fields": {"team": {"type": "string", "max_length": 9}}}, "max_items": 2, "optional": true}}}
   }
 }`
 
@@ -54,10 +58,22 @@ func startBroker(t *testing.T, handler http.HandlerFunc) string {
 	return path
 }
 
-func runCall(t *testing.T, args ...string) output {
+func runNeurokit(
+	t *testing.T,
+	subcommand string,
+	args ...string,
+) output {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	got := output{exit: cli.Call(args, &stdout, &stderr)}
+	var got output
+	switch subcommand {
+	case "run":
+		got.exit = cli.Run(args, "v0.0.0-test", &stdout, &stderr)
+	case "call":
+		got.exit = cli.Call(args, &stdout, &stderr)
+	case "health":
+		got.exit = cli.Health(args, &stdout, &stderr)
+	}
 	got.stdout, got.stderr = stdout.String(), stderr.String()
 	// A success reply has no error, so this empty one lets tests read
 	// Error.Code on any reply.
@@ -84,7 +100,7 @@ func TestSendsCheckedBodyWithSpecHeader(t *testing.T) {
 	)
 	const body = `{"position":3,"approval":"policy:test"}`
 
-	got := runCall(t, manifestPath, "swap", body)
+	got := runNeurokit(t, "call", manifestPath, "swap", body)
 
 	if got.exit != 0 || gotPath != "/commands/swap" || gotSpec != "1" || gotBody != body {
 		t.Errorf(
@@ -108,15 +124,66 @@ func TestBadArgumentsExitTwoWithoutSending(t *testing.T) {
 		},
 	)
 
-	got := runCall(t, manifestPath, "swap", `{"position":3,"colour":"red"}`)
+	tests := []struct {
+		name        string
+		subcommand  string
+		swapArgs    []string
+		wantMessage string
+	}{
+		{
+			name:        "call with an unknown argument",
+			subcommand:  "call",
+			swapArgs:    []string{`{"position":3,"colour":"red"}`},
+			wantMessage: "colour",
+		},
+		{
+			name:        "run with an unknown flag",
+			subcommand:  "run",
+			swapArgs:    []string{"--position=3", "--colour=red"},
+			wantMessage: "colour",
+		},
+		{
+			name:        "run with an object argument",
+			subcommand:  "run",
+			swapArgs:    []string{"--position=3", "--filter=team"},
+			wantMessage: "neurokit call",
+		},
+		{
+			name:        "run with a list of objects",
+			subcommand:  "run",
+			swapArgs:    []string{"--position=3", `--filters={"team":"red"}`},
+			wantMessage: "neurokit call",
+		},
+		{
+			name:        "run with a word after a boolean",
+			subcommand:  "run",
+			swapArgs:    []string{"--position=3", "--keep-bench", "false"},
+			wantMessage: "unexpected argument",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(
+			tt.name,
+			func(t *testing.T) {
+				got := runNeurokit(
+					t,
+					tt.subcommand,
+					append([]string{manifestPath, "swap"}, tt.swapArgs...)...,
+				)
 
-	if got.exit != 2 || got.Error.Code != wire.CodeInvalidRequest || got.Write != wire.WriteStateNotSent || !strings.Contains(got.stderr, "usage: neurokit call") {
-		t.Errorf(
-			"exit %d, %+v, write %q, stderr %q; want exit 2, invalid-request, write not-sent and a usage line",
-			got.exit,
-			got.Error,
-			got.Write,
-			got.stderr,
+				wantUsage := "usage: neurokit " + tt.subcommand
+				if got.exit != 2 || got.Error.Code != wire.CodeInvalidRequest || got.Write != wire.WriteStateNotSent || !strings.Contains(got.Error.Message, tt.wantMessage) || !strings.Contains(got.stderr, wantUsage) {
+					t.Errorf(
+						"exit %d, %+v, write %q, stderr %q; want exit 2, invalid-request naming %q, write not-sent and %q",
+						got.exit,
+						got.Error,
+						got.Write,
+						got.stderr,
+						tt.wantMessage,
+						wantUsage,
+					)
+				}
+			},
 		)
 	}
 }
@@ -210,7 +277,13 @@ func TestReplyDecidesExitAndPrintedBody(t *testing.T) {
 					},
 				)
 
-				got := runCall(t, manifestPath, tt.command, validArgs[tt.command])
+				got := runNeurokit(
+					t,
+					"call",
+					manifestPath,
+					tt.command,
+					validArgs[tt.command],
+				)
 
 				if got.exit != tt.wantExit || string(got.Result) != tt.wantResult || got.Error.Code != tt.wantCode || got.Write != tt.wantWrite || got.Error.RequestID != tt.wantRequestID || !strings.HasPrefix(got.stderr, tt.wantStderr) {
 					t.Errorf(
@@ -301,7 +374,7 @@ func TestNoReplyOutcomeDependsOnConnect(t *testing.T) {
 					t.Setenv("DEMO_BROKER_URL", "http://"+ln.Addr().String())
 				}
 
-				got := runCall(t, manifestPath, "swap", validArgs["swap"])
+				got := runNeurokit(t, "call", manifestPath, "swap", validArgs["swap"])
 
 				if got.exit != 1 || got.Error.Code != tt.wantCode || got.Write != tt.wantWrite {
 					t.Errorf(
@@ -330,7 +403,7 @@ func TestClientWaitsDeadlinePlusFiveSeconds(t *testing.T) {
 	)
 
 	start := time.Now()
-	got := runCall(t, manifestPath, "swap", validArgs["swap"])
+	got := runNeurokit(t, "call", manifestPath, "swap", validArgs["swap"])
 	elapsed := time.Since(start)
 
 	if elapsed < 5100*time.Millisecond || elapsed > 6*time.Second || got.Error.Code != wire.CodeChangeUnknown || got.Write != wire.WriteStateUnknown {
@@ -339,6 +412,171 @@ func TestClientWaitsDeadlinePlusFiveSeconds(t *testing.T) {
 			elapsed,
 			got.Error,
 			got.Write,
+		)
+	}
+}
+
+// Every tool gets its flags from its manifest by one rule, so a skill can
+// teach run without each tool inventing its own flags.
+func TestRunSendsFlagsAsArguments(t *testing.T) {
+	var gotBody string
+	manifestPath := startBroker(
+		t,
+		func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			gotBody = string(body)
+			io.WriteString(w, `{"result":"swapped","write":"verified"}`)
+		},
+	)
+
+	got := runNeurokit(
+		t,
+		"run",
+		manifestPath,
+		"swap",
+		"--position=3",
+		"--slot-ids=4",
+		"--slot-ids=5",
+		"--keep-bench",
+		"--approval=policy:test",
+	)
+
+	const want = `{"approval":"policy:test","keep_bench":true,"position":3,"slot_ids":[4,5]}`
+	if got.exit != 0 || gotBody != want {
+		t.Errorf(
+			"exit %d, stderr %q, broker got %s; want exit 0 and %s",
+			got.exit,
+			got.stderr,
+			gotBody,
+			want,
+		)
+	}
+}
+
+// A broker image's Compose health check runs where the URL variable is unset,
+// so health must find serve on its own port.
+func TestHealthUsesLocalBrokerWithoutEnv(t *testing.T) {
+	// In CI a skip would leave the fallback untested, so a taken port fails.
+	ln, err := net.Listen("tcp", "127.0.0.1:8080")
+	if err != nil && os.Getenv("CI") != "" {
+		t.Fatalf("port 8080 is taken: %v", err)
+	}
+	if err != nil {
+		t.Skipf("port 8080 is taken: %v", err)
+	}
+	var askedReadyz bool
+	local := httptest.NewUnstartedServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/readyz" {
+					askedReadyz = true
+				}
+				io.WriteString(w, `{"result":"ok"}`)
+			},
+		),
+	)
+	local.Listener.Close()
+	local.Listener = ln
+	local.Start()
+	t.Cleanup(local.Close)
+	manifestPath := startBroker(
+		t,
+		func(http.ResponseWriter, *http.Request) {},
+	)
+	for _, unset := range []bool{true, false} {
+		t.Setenv("DEMO_BROKER_URL", "")
+		if unset {
+			os.Unsetenv("DEMO_BROKER_URL")
+		}
+		askedReadyz = false
+
+		got := runNeurokit(t, "health", manifestPath)
+
+		if got.exit != 0 || !askedReadyz {
+			t.Errorf(
+				"with DEMO_BROKER_URL unset %t: exit %d, stderr %q, local /readyz asked %t; want exit 0 from it",
+				unset,
+				got.exit,
+				got.stderr,
+				askedReadyz,
+			)
+		}
+	}
+}
+
+// Compose trusts health's exit status, so a broker that is not ready, or
+// never answers, must fail before the next check starts.
+func TestHealthExitsOneUnlessBrokerReady(t *testing.T) {
+	tests := []struct {
+		name            string
+		broker          http.HandlerFunc
+		wantExit        int
+		wantCode        string
+		wantStderrLines int
+	}{
+		{
+			name: "ready",
+			broker: func(w http.ResponseWriter, _ *http.Request) {
+				io.WriteString(w, `{"result":"ok"}`)
+			},
+			wantExit:        0,
+			wantCode:        "",
+			wantStderrLines: 0,
+		},
+		{
+			name: "not ready",
+			broker: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				io.WriteString(w, `{"error":{"code":"not-ready","message":"ready failed","request_id":"req-3"}}`)
+			},
+			wantExit:        1,
+			wantCode:        wire.CodeNotReady,
+			wantStderrLines: 1,
+		},
+		{
+			name: "never answers",
+			broker: func(_ http.ResponseWriter, r *http.Request) {
+				<-r.Context().Done()
+			},
+			wantExit:        1,
+			wantCode:        wire.CodeBrokerUnavailable,
+			wantStderrLines: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(
+			tt.name,
+			func(t *testing.T) {
+				manifestPath := startBroker(
+					t,
+					func(w http.ResponseWriter, r *http.Request) {
+						// Other programs on a developer's machine may probe a new
+						// port with GET /, so only /readyz gets the reply under test.
+						if r.URL.Path != "/readyz" {
+							http.NotFound(w, r)
+							return
+						}
+						tt.broker(w, r)
+					},
+				)
+
+				start := time.Now()
+				got := runNeurokit(t, "health", manifestPath)
+				elapsed := time.Since(start)
+
+				if got.exit != tt.wantExit || got.Error.Code != tt.wantCode || strings.Count(got.stderr, "\n") != tt.wantStderrLines || elapsed > 4*time.Second {
+					t.Errorf(
+						"exit %d after %v, stdout %s, stderr %q; want exit %d, code %q and %d stderr lines within 4 s",
+						got.exit,
+						elapsed,
+						got.stdout,
+						got.stderr,
+						tt.wantExit,
+						tt.wantCode,
+						tt.wantStderrLines,
+					)
+				}
+			},
 		)
 	}
 }

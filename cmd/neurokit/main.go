@@ -12,20 +12,34 @@ import (
 	"github.com/henrico813/neurokit/internal/cli"
 )
 
-const usage = "usage: neurokit serve|call <manifest> ..."
-
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(os.Stderr, cli.Usage)
 		os.Exit(2)
 	}
 	switch os.Args[1] {
 	case "serve":
 		os.Exit(runServeCommand(os.Args[2:]))
+	case "run":
+		os.Exit(cli.Run(
+			os.Args[2:],
+			readVersion(),
+			os.Stdout,
+			os.Stderr,
+		))
 	case "call":
 		os.Exit(cli.Call(os.Args[2:], os.Stdout, os.Stderr))
+	case "help":
+		os.Exit(cli.Help(
+			os.Args[2:],
+			readVersion(),
+			os.Stdout,
+			os.Stderr,
+		))
+	case "health":
+		os.Exit(cli.Health(os.Args[2:], os.Stdout, os.Stderr))
 	}
-	fmt.Fprintln(os.Stderr, usage)
+	fmt.Fprintln(os.Stderr, cli.Usage)
 	os.Exit(2)
 }
 
