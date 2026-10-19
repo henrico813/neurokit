@@ -38,7 +38,7 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 
 ## Python tools
 
-`python/neurokit` is a Python library for writing a tool as plain functions. It writes the tool's manifest and answers the broker's requests, so the tool has no code of its own for either. It needs Python 3.12 or later and installs pydantic: `pip install ./python`.
+`python/neurokit` is a Python library for writing a tool as plain functions. It writes the tool's manifest and answers the broker's requests, so the tool has no code of its own for either. Install it with `pip install ./python`; it needs Python 3.12 or later, brings pydantic, and shows in pip as `neurokit-broker`.
 
 A tool module defines one `Broker`. Each command is a function. The command's name is the function's name with `_` changed to `-`, so `save_greeting` becomes `save-greeting`.
 
