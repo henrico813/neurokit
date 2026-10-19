@@ -5,7 +5,7 @@ from typing import Annotated, NotRequired, TypedDict
 import pytest
 from pydantic import Field
 
-from neurokit import Tool
+from neurokit import Broker
 from neurokit.manifest import build_manifest
 
 
@@ -18,12 +18,12 @@ class Slot(TypedDict):
 
 def build_args(function):
     """Returns the manifest args that function's type hints become."""
-    tool = Tool("t", broker_url_env="T_URL", max_handlers=1)
-    tool.command(deadline_ms=1, max_body_bytes=1, max_response_bytes=1)(
+    broker = Broker("t", broker_url_env="T_URL", max_handlers=1)
+    broker.command(deadline_ms=1, max_body_bytes=1, max_response_bytes=1)(
         function
     )
     name = function.__name__.replace("_", "-")
-    return build_manifest(tool, "t")["commands"][name]["args"]
+    return build_manifest(broker, "t")["commands"][name]["args"]
 
 
 class TestManifest:

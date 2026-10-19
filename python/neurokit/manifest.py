@@ -1,4 +1,4 @@
-"""Builds manifest.json from a Tool, reading limits through pydantic.
+"""Builds manifest.json from a Broker, reading limits through pydantic.
 
 Each parameter's type hint, such as ``Annotated[str, Field(max_length=200)]``,
 becomes pydantic's JSON Schema, which maps onto a manifest argument. A limit
@@ -30,7 +30,7 @@ REQUIRED_LIMITS = {
 IGNORED_KEYS = {"type", "title", "description", "$defs"}
 
 
-def build_manifest(tool, module_name):
+def build_manifest(broker, module_name):
     """Returns the manifest as a dict, telling serve to import module_name.
 
     Raises:
@@ -39,15 +39,15 @@ def build_manifest(tool, module_name):
     """
     runner = ["python3", "-m", "neurokit"]
     return {
-        "name": tool.name,
+        "name": broker.name,
         "spec": SPEC,
-        "broker_url_env": tool.broker_url_env,
-        "max_handlers": tool.max_handlers,
+        "broker_url_env": broker.broker_url_env,
+        "max_handlers": broker.max_handlers,
         "program": [*runner, "handle", module_name],
         "check": [*runner, "check", module_name],
         "commands": {
             name: build_command_entry(command)
-            for name, command in sorted(tool.commands.items())
+            for name, command in sorted(broker.commands.items())
         },
     }
 

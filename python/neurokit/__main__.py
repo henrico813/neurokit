@@ -10,8 +10,8 @@ import os
 import sys
 
 from neurokit.answer import answer_request
+from neurokit.broker import Broker
 from neurokit.manifest import build_manifest
-from neurokit.tool import Tool
 
 USAGE = """usage: python -m neurokit manifest MODULE PATH
        python -m neurokit handle MODULE
@@ -22,9 +22,11 @@ def main(argv):
     """Runs the action that argv names, as USAGE shows."""
     match argv:
         case ["manifest", module_name, path]:
-            tool = find_tool(module_name)
+            broker = find_broker(module_name)
             try:
-                text = json.dumps(build_manifest(tool, module_name), indent=2)
+                text = json.dumps(
+                    build_manifest(broker, module_name), indent=2
+                )
             except ValueError as error:
                 sys.exit(f"neurokit manifest: {error}")
             with open(path, "w") as out:
@@ -33,26 +35,29 @@ def main(argv):
             # A program the tool starts, even while it imports, must not
             # hold the answer pipe open, or the broker waits for it.
             os.set_inheritable(3, False)
-            answer_request(find_tool(module_name))
+            answer_request(find_broker(module_name))
         case ["check", module_name]:
-            check_function = find_tool(module_name).check_function
+            check_function = find_broker(module_name).check_function
             if check_function:
                 check_function()
         case _:
             sys.exit(USAGE)
 
 
-def find_tool(module_name):
-    """Returns the one Tool the module defines, or exits naming the module."""
+def find_broker(module_name):
+    """Returns the one Broker the module defines, or exits naming the
+    module.
+    """
     module = importlib.import_module(module_name)
-    tools = [
-        value for value in vars(module).values() if isinstance(value, Tool)
+    brokers = [
+        value for value in vars(module).values() if isinstance(value, Broker)
     ]
-    if len(tools) != 1:
+    if len(brokers) != 1:
         sys.exit(
-            f"neurokit: {module_name} must define one Tool, not {len(tools)}"
+            f"neurokit: {module_name} must define one Broker, "
+            f"not {len(brokers)}"
         )
-    return tools[0]
+    return brokers[0]
 
 
 if __name__ == "__main__":

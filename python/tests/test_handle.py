@@ -32,12 +32,12 @@ def handle_request(tmp_path, body):
     tool = """
         import os
 
-        from neurokit import Done, Fail, Tool
+        from neurokit import Broker, Done, Fail
 
         inheritable_at_import = os.get_inheritable(3)
-        tool = Tool("t", broker_url_env="T_URL", max_handlers=1)
+        broker = Broker("t", broker_url_env="T_URL", max_handlers=1)
 
-        @tool.command(deadline_ms=1, max_body_bytes=1, max_response_bytes=1)
+        @broker.command(deadline_ms=1, max_body_bytes=1, max_response_bytes=1)
         def set_name(name):
     """
     (tmp_path / "tool.py").write_text(

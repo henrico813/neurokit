@@ -40,7 +40,7 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 
 `python/neurokit` is a Python library for writing a tool as plain functions. It writes the tool's manifest and answers the broker's requests, so the tool has no code of its own for either. It needs Python 3.12 or later and installs pydantic: `pip install ./python`.
 
-A tool module defines one `Tool`. Each command is a function. The command's name is the function's name with `_` changed to `-`, so `save_greeting` becomes `save-greeting`.
+A tool module defines one `Broker`. Each command is a function. The command's name is the function's name with `_` changed to `-`, so `save_greeting` becomes `save-greeting`.
 
 Every argument needs a type hint. A `str` needs `Field(max_length=...)`, an `int` needs `Field(ge=..., le=...)`, and a list needs `Field(max_length=...)`, because the broker checks these limits before your code runs. An object argument is a `TypedDict`, and the function gets a dict.
 
@@ -49,17 +49,17 @@ A default value on the parameter makes the argument optional; `Field(default=...
 ```python
 from typing import Annotated
 
-from neurokit import Tool
+from neurokit import Broker
 from pydantic import Field
 
-tool = Tool(
+broker = Broker(
     "greeter",
     broker_url_env="GREETER_URL",
     max_handlers=1,
 )
 
 
-@tool.command(
+@broker.command(
     deadline_ms=5_000,
     max_body_bytes=1_000,
     max_response_bytes=1_000,
@@ -84,7 +84,7 @@ Any other pairing reaches the caller as `change-unknown`: a plain return value, 
 
 In the broker container, `neurokit serve manifest.json` runs `python3 -m neurokit handle greeter` for each request. So `python3` must have this library installed and must be able to import `greeter`, for example from the folder `serve` starts in or through `PYTHONPATH`.
 
-`@tool.check` marks a function that `serve` runs once at start, such as reading a secret. If it raises, `serve` stops with the exception's last line as the reason.
+`@broker.check` marks a function that `serve` runs once at start, such as reading a secret. If it raises, `serve` stops with the exception's last line as the reason.
 
 On the caller's side, `neurokit.call(...)` runs the `neurokit call` binary, which must be on `PATH`. The variable that `broker_url_env` names, here `GREETER_URL`, must hold the broker's URL, as "Calling a broker" above describes.
 

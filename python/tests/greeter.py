@@ -6,18 +6,18 @@ from typing import Annotated
 
 from pydantic import Field
 
-from neurokit import NOT_SENT, VERIFIED, Done, Fail, Tool
+from neurokit import NOT_SENT, VERIFIED, Broker, Done, Fail
 
-tool = Tool("greeter", broker_url_env="GREETER_URL", max_handlers=1)
+broker = Broker("greeter", broker_url_env="GREETER_URL", max_handlers=1)
 
 
-@tool.check
+@broker.check
 def check():
     """Fails when the token file is missing, as a tool's secret would."""
     (Path(os.environ["GREETER_DIR"]) / "token").read_text()
 
 
-@tool.command(
+@broker.command(
     deadline_ms=5_000, max_body_bytes=1_000, max_response_bytes=1_000
 )
 def greet(name: Annotated[str, Field(max_length=20)]) -> dict:
@@ -25,7 +25,7 @@ def greet(name: Annotated[str, Field(max_length=20)]) -> dict:
     return {"greeting": f"hello {name}"}
 
 
-@tool.command(
+@broker.command(
     mutating=True,
     lock="write",
     approval=True,

@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "neurokit"
+name = "neurokit-broker"
 version = "0.1.0.dev0"
 description = "Write a neurokit tool's commands as Python functions."
 license = "MIT"

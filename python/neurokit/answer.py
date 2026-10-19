@@ -47,7 +47,7 @@ class Fail(Exception):  # noqa: N818
         self.request_id: str | None = None
 
 
-def answer_request(tool):
+def answer_request(broker):
     """Runs the command serve asked for and writes its answer to file 3.
 
     serve passes the arguments on stdin, the command's name in
@@ -56,7 +56,7 @@ def answer_request(tool):
     written, so the broker reports a crash and the traceback stays in its
     log.
     """
-    function = tool.commands[os.environ["NEUROKIT_COMMAND"]].function
+    function = broker.commands[os.environ["NEUROKIT_COMMAND"]].function
     status = 0
     try:
         value = function(**json.load(sys.stdin))

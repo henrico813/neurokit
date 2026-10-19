@@ -1,4 +1,4 @@
-"""Tool and its decorators, which say what goes into manifest.json."""
+"""Broker and its decorators, which say what goes into manifest.json."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -12,12 +12,12 @@ class Command:
     settings: dict
 
 
-class Tool:
+class Broker:
     """One broker's commands, collected by its decorators.
 
     Example::
 
-        tool = Tool("scout", broker_url_env="SCOUT_URL", max_handlers=2)
+        broker = Broker("scout", broker_url_env="SCOUT_URL", max_handlers=2)
 
     Args:
         name: The tool's name in the manifest.
