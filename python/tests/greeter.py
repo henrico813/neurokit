@@ -1,0 +1,43 @@
+"""A small tool that the tests run under a real neurokit serve."""
+
+import os
+from pathlib import Path
+from typing import Annotated
+
+from pydantic import Field
+
+from neurokit import NOT_SENT, VERIFIED, Done, Fail, Tool
+
+tool = Tool("greeter", broker_url_env="GREETER_URL", max_handlers=1)
+
+
+@tool.check
+def check():
+    """Fails when the token file is missing, as a tool's secret would."""
+    (Path(os.environ["GREETER_DIR"]) / "token").read_text()
+
+
+@tool.command(
+    deadline_ms=5_000, max_body_bytes=1_000, max_response_bytes=1_000
+)
+def greet(name: Annotated[str, Field(max_length=20)]) -> dict:
+    """Returns a greeting for name."""
+    return {"greeting": f"hello {name}"}
+
+
+@tool.command(
+    mutating=True,
+    lock="write",
+    approval=True,
+    errors=["empty-greeting"],
+    deadline_ms=5_000,
+    max_body_bytes=1_000,
+    max_response_bytes=1_000,
+)
+def save_greeting(text: Annotated[str, Field(max_length=20)]) -> Done:
+    """Saves text to a file and reads it back."""
+    if not text:
+        raise Fail("empty-greeting", "say something", write=NOT_SENT)
+    path = Path(os.environ["GREETER_DIR"]) / "greeting"
+    path.write_text(text)
+    return Done({"saved": path.read_text()}, write=VERIFIED)

@@ -36,6 +36,32 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 
 `neurokit help <manifest>` lists the commands, and `neurokit help <manifest> <command>` lists one command's flags; `--help` after a command prints that command's flags. With no manifest, `help` prints the version and the usage line.
 
+## Python tools
+
+`python/neurokit` is the library a Python tool is written in, so no tool writes its own manifest or answer pipe. It needs Python 3.12 or later and installs pydantic: `pip install ./python`.
+
+A tool module defines one `Tool`. Each command is a function named after it, with `_` as `-`, and its arguments' limits are pydantic `Field`s:
+
+```python
+tool = Tool("greeter",
+            broker_url_env="GREETER_URL",
+            max_handlers=1)
+
+@tool.command(deadline_ms=5_000,
+              max_body_bytes=1_000,
+              max_response_bytes=1_000)
+def greet(
+    name: Annotated[str, Field(max_length=20)],
+) -> dict:
+    return {"greeting": f"hello {name}"}
+```
+
+A function returns its result or raises `Fail(code, message)`; any other exception is a crash. A mutation returns `Done(result, write=...)` or raises `Fail(..., write=...)`, with `write` set to `NOT_SENT`, `SENT` or `VERIFIED`. `Done` has no default `write`, so a forgotten one reaches the caller as `change-unknown`.
+
+`python -m neurokit manifest greeter manifest.json` writes the manifest, which the tool commits. It refuses, in one line, a limit the manifest cannot hold, such as `min_length`.
+
+On the caller's side, `neurokit.call(manifest, command, **args)` runs `neurokit call` and returns what the function returned, or raises its `Fail`.
+
 ## Layout
 
 The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; there is no public Go library. Each package owns one concern:
@@ -49,6 +75,8 @@ The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; ther
 
 Packages import each other in one direction only. `internal/imports_test.go` lists what each package may import, and fails when a package imports an internal package outside its row or has no row at all.
 
+Outside Go, `python/neurokit` is the Python library, and `python/tests` holds its tests.
+
 ## Development
 
 The module needs Go 1.27.2, or Go 1.21 or later with the default `GOTOOLCHAIN=auto`, which downloads it. Run the same checks as CI; `gofmt -l .` prints nothing when every file is formatted:
@@ -57,6 +85,13 @@ The module needs Go 1.27.2, or Go 1.21 or later with the default `GOTOOLCHAIN=au
 gofmt -l .
 go vet ./...
 go test ./...
+```
+
+The Python tests need Go too, because they build `serve` and start it on port 8080:
+
+```sh
+pip install ./python pytest
+python -m pytest python/tests
 ```
 
 `.github/workflows/ci.yml` runs them on every pull request and every push to `main`.

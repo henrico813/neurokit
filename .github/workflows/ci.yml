@@ -35,6 +35,26 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  python:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The call tests build serve from this checkout.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      # pydantic and pytest are pinned, so a new release cannot change the
+      # checks.
+      - run: pip install ./python pydantic==2.11.9 pytest==9.1.1
+      - run: python -m pytest python/tests
+
   container:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

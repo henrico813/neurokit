@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurokit"
+version = "0.1.0.dev0"
+description = "Write a neurokit tool's commands as Python functions."
+license = "MIT"
+requires-python = ">=3.12"
+# A range, so Hermes and each tool image keep their own pydantic 2.
+dependencies = ["pydantic>=2.11.9,<3"]
+
+[tool.setuptools]
+packages = ["neurokit"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 79
