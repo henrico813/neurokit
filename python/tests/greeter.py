@@ -13,7 +13,9 @@ broker = Broker("greeter", broker_url_env="GREETER_URL", max_handlers=1)
 
 @broker.check
 def check():
-    """Fails when the token file is missing, as a tool's secret would."""
+    """Fails when the token file is missing, like a real tool whose secret
+    is missing.
+    """
     (Path(os.environ["GREETER_DIR"]) / "token").read_text()
 
 
@@ -35,7 +37,9 @@ def greet(name: Annotated[str, Field(max_length=20)]) -> dict:
     max_response_bytes=1_000,
 )
 def save_greeting(text: Annotated[str, Field(max_length=20)]) -> Done:
-    """Saves text to a file and reads it back."""
+    """Saves text and reads it back to verify it; empty text fails with
+    not-sent.
+    """
     if not text:
         raise Fail("empty-greeting", "say something", write=NOT_SENT)
     path = Path(os.environ["GREETER_DIR"]) / "greeting"

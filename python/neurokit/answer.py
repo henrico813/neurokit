@@ -12,8 +12,9 @@ UNKNOWN, NOT_SENT, SENT, VERIFIED = "unknown", "not-sent", "sent", "verified"
 class Done:
     """A mutating command's result, with how far its change got.
 
-    ``write`` has no default: a forgotten outcome is a crash, which the
-    broker reports as change-unknown rather than a guess.
+    ``write`` has no default, so a forgotten one is a crash, which the
+    caller gets as change-unknown. A success with ``write=SENT`` reaches the
+    caller as change-unknown too.
 
     Example::
 
@@ -35,8 +36,8 @@ class Fail(Exception):  # noqa: N818
         code: A shared code such as ``invalid-request``, or one the
             command lists in ``errors``.
         message: Plain words for the caller; never a secret.
-        write: For a mutation, how far the change got. Without it, the
-            broker reports change-unknown.
+        write: For a mutation, ``NOT_SENT`` or ``SENT``. Without it, or with
+            ``VERIFIED``, the broker reports change-unknown.
     """
 
     def __init__(self, code: str, message: str, *, write: str | None = None):
@@ -48,13 +49,12 @@ class Fail(Exception):  # noqa: N818
 
 
 def answer_request(broker):
-    """Runs the command serve asked for and writes its answer to file 3.
+    """Runs the command named in ``NEUROKIT_COMMAND`` with the JSON arguments
+    from stdin, and writes the answer to file 3, the answer pipe.
 
-    serve passes the arguments on stdin, the command's name in
-    ``NEUROKIT_COMMAND`` and the answer pipe as file 3. Exits 0 after a
-    result and 1 after a Fail. Any other exception exits 1 with nothing
-    written, so the broker reports a crash and the traceback stays in its
-    log.
+    Exits 0 after a result and 1 after a Fail. Any other exception exits 1
+    with nothing written, so the broker reports a crash and the traceback
+    stays in its log.
     """
     function = broker.commands[os.environ["NEUROKIT_COMMAND"]].function
     status = 0

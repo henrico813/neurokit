@@ -1,8 +1,7 @@
 """Tests for answering a request, run the way neurokit serve runs it.
 
-Each test starts ``python -m neurokit`` with a pipe at file 3, so it sees
-what the broker sees: the exit status, the answer on file 3 and the log on
-stderr.
+Each test starts ``python -m neurokit handle`` with a pipe at file 3 and
+sees what the broker sees: the exit status, the answer and stderr.
 """
 
 import json
@@ -18,7 +17,8 @@ PYTHON_DIR = Path(__file__).resolve().parents[1]
 
 
 def handle_request(tmp_path, body):
-    """Writes a tool whose set-name command runs body, and answers it.
+    """Writes a tool whose set-name command runs body, and runs one request
+    as serve would.
 
     The tool records, while it imports, whether file 3 is inheritable.
 
@@ -71,10 +71,11 @@ class TestAnswer:
     """What a command's answer says for each way its function ends."""
 
     def test_fail_without_write_sends_no_write(self, tmp_path):
-        """A Fail without write sends none, so the broker says change-unknown.
+        """A Fail without write sends none, so for a mutating command the
+        broker says change-unknown.
 
         Callers retry a change only after not-sent, so a library that filled
-        one in could repeat a change.
+        in not-sent could make a caller repeat a change.
         """
         process, written = handle_request(
             tmp_path, "raise Fail('name-taken', 'no')"
@@ -101,11 +102,10 @@ class TestAnswer:
         ],
     )
     def test_crash_leaves_answer_empty(self, tmp_path, body, error):
-        """A crash writes no answer, so the broker reports it as a crash.
+        """A crash writes no answer, so nothing reaches the caller as a
+        result, not even a Done without write.
 
         The traceback, which can hold a token, stays in the broker's log.
-        Half an answer, or a Done without write, must not reach the caller
-        as a result.
         """
         process, written = handle_request(tmp_path, body)
 
@@ -115,8 +115,8 @@ class TestAnswer:
     def test_started_programs_cannot_inherit_answer_pipe(self, tmp_path):
         """A program the tool starts, even at import, cannot inherit file 3.
 
-        After the handler exits, the broker waits up to 200 ms for every copy
-        of file 3 to close, so a program left holding one slows every reply.
+        A program that leaves the handler's process group and still holds
+        file 3 makes the broker wait up to 200 ms before it replies.
         """
         body = "return inheritable_at_import"
 

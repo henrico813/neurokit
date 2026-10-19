@@ -88,10 +88,11 @@ class TestManifest:
         ],
     )
     def test_refuses_hints_manifest_cannot_express(self, hint, error):
-        """A limit with no place in the manifest stops the build.
+        """A type hint the manifest cannot express is refused with a message
+        naming the parameter.
 
-        Dropping it would leave the author believing the broker enforces
-        it, while any value gets through.
+        Writing the manifest anyway would drop a limit the author set, or
+        leave out one the broker requires.
         """
 
         def plan(name): ...

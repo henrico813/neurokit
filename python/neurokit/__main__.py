@@ -32,8 +32,10 @@ def main(argv):
             with open(path, "w") as out:
                 out.write(text + "\n")
         case ["handle", module_name]:
-            # A program the tool starts, even while it imports, must not
-            # hold the answer pipe open, or the broker waits for it.
+            # A program the tool starts, even during import, must not
+            # inherit the answer pipe. If it leaves the handler's process
+            # group and keeps it open, the broker's reply waits up to 200 ms
+            # for it.
             os.set_inheritable(3, False)
             answer_request(find_broker(module_name))
         case ["check", module_name]:
@@ -45,9 +47,7 @@ def main(argv):
 
 
 def find_broker(module_name):
-    """Returns the one Broker the module defines, or exits naming the
-    module.
-    """
+    """Returns the module's one Broker, or exits naming the module."""
     module = importlib.import_module(module_name)
     brokers = [
         value for value in vars(module).values() if isinstance(value, Broker)

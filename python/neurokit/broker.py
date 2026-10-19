@@ -46,8 +46,9 @@ class Broker:
     ) -> Callable[[F], F]:
         """Makes the function a command named after it, with ``_`` as ``-``.
 
-        The arguments are the command's settings in the manifest, which the
-        README's Terms describe.
+        The arguments become the command's settings in the manifest; the
+        README's Terms describe them. ``errors`` lists the extra codes this
+        command's ``Fail`` may use.
         """
 
         def register(function: F) -> F:

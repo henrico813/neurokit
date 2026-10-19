@@ -12,8 +12,6 @@ def call(manifest: str | os.PathLike[str], command: str, /, **args) -> object:
 
     The ``neurokit`` binary on PATH checks the arguments against the
     manifest and sends them to the broker. A mutation returns ``Done``.
-    Every error reply, from the function, the broker or the binary, raises
-    ``Fail``.
 
     Example::
 

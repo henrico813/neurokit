@@ -25,8 +25,9 @@ REQUIRED_LIMITS = {
     "integer": {"minimum", "maximum"},
     "array": {"maxItems"},
 }
-# Keys that limit nothing. A ``default`` is refused, because the broker
-# never fills one in.
+# Keys that limit nothing. ``default`` is not listed, so
+# ``Field(default=...)`` is refused: the broker never fills in a default. A
+# Python default on the parameter works and makes the argument optional.
 IGNORED_KEYS = {"type", "title", "description", "$defs"}
 
 
