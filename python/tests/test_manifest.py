@@ -42,6 +42,7 @@ class TestManifest:
             count: Annotated[int, Field(ge=1, le=50)],
             slots: Annotated[list[Slot], Field(max_length=7)],
             dry_run: bool = False,
+            label: Annotated[str, Field(max_length=30)] | None = None,
         ): ...
 
         args = build_args(plan)
@@ -65,6 +66,7 @@ class TestManifest:
                 "max_items": 7,
             },
             "dry_run": {"type": "boolean", "optional": True},
+            "label": {"type": "string", "max_length": 30, "optional": True},
         }
 
     @pytest.mark.parametrize(
@@ -85,6 +87,11 @@ class TestManifest:
                 "the manifest cannot hold ['additionalProperties']",
                 id="dict-without-fields",
             ),
+            pytest.param(
+                Annotated[str | None, Field(default="x", max_length=5)],
+                "the manifest cannot hold ['default']",
+                id="union-with-field-default",
+            ),
         ],
     )
     def test_refuses_hints_manifest_cannot_express(self, hint, error):
@@ -103,3 +110,44 @@ class TestManifest:
             build_args(plan)
 
         assert str(raised.value) == f"plan(name): {error}"
+
+    @pytest.mark.parametrize(
+        ("hint", "defaults"),
+        [
+            pytest.param(
+                Annotated[str, Field(max_length=5)] | None,
+                None,
+                id="optional-without-default",
+            ),
+            pytest.param(
+                Annotated[str, Field(max_length=5)] | None,
+                ("Ann",),
+                id="optional-with-other-default",
+            ),
+            pytest.param(
+                Annotated[str, Field(max_length=5)]
+                | Annotated[int, Field(ge=0, le=9)],
+                (None,),
+                id="two-types-without-none",
+            ),
+        ],
+    )
+    def test_refuses_unions_except_none_default(self, hint, defaults):
+        """Only ``X | None = None`` is accepted as a union.
+
+        A manifest argument has one type, and the broker refuses null, so
+        a required ``X | None``, or one with another default, could never
+        reach the function's None case.
+        """
+
+        def plan(name): ...
+
+        plan.__annotations__ = {"name": hint}
+        plan.__defaults__ = defaults
+
+        with pytest.raises(ValueError) as raised:
+            build_args(plan)
+
+        assert str(raised.value) == (
+            "plan(name): a union must be X | None = None"
+        )
