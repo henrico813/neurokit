@@ -193,6 +193,11 @@ func validateCommand(name string, c *Command) error {
 	if _, ok := c.Args["approval"]; ok {
 		return errors.New(`argument name "approval" is reserved for the audit label`)
 	}
+	for _, name := range []string{"help", "h"} {
+		if _, ok := c.Args[name]; ok {
+			return fmt.Errorf("argument name %q is reserved for neurokit run --help", name)
+		}
+	}
 	return validateDeclaredArgs(c.Args)
 }
 

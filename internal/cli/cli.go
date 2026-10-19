@@ -1,6 +1,5 @@
-// Package cli checks a command's arguments against the tool's manifest,
-// sends them to the broker, and prints the reply, or the lack of one, as the
-// README's "Calling a broker" section describes.
+// Package cli is neurokit's client: the run, call, help and health commands
+// that the README's "Calling a broker" section describes.
 package cli
 
 import (
@@ -13,8 +12,13 @@ import (
 	"github.com/henrico813/neurokit/internal/wire"
 )
 
+const Usage = "usage: neurokit serve|run|call|help|health <manifest> ..."
+
 var usages = map[string]string{
-	"call": "usage: neurokit call <manifest> <command> <json>",
+	"run":    "usage: neurokit run <manifest> <command> [--flags]",
+	"call":   "usage: neurokit call <manifest> <command> <json>",
+	"help":   "usage: neurokit help [<manifest> [<command>]]",
+	"health": "usage: neurokit health <manifest>",
 }
 
 type printer struct {

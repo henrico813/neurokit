@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptrace"
 	"os"
@@ -24,6 +25,10 @@ const (
 	// A broker replies change-unknown up to 2 s after a handler's deadline,
 	// once it has stopped the handler, so the client waits longer than that.
 	deadlineMargin = 5 * time.Second
+	// Broker health checks run every 5 s, so each one ends before the next
+	// starts.
+	healthTimeout  = 3 * time.Second
+	localBrokerURL = "http://127.0.0.1:8080"
 )
 
 // Sends the body it checked, not the decoded arguments, because those no
@@ -67,6 +72,54 @@ func (p printer) checkAndSendCommand(
 		reply = describeMissingReply(cmd.Mutating, connected, err)
 	case cmd.Mutating:
 		reply = markUnclearReplyUnknown(reply)
+	}
+	return p.printReply(reply)
+}
+
+// Prints the reply from /readyz as Call does. An unset or empty URL variable
+// means the check runs in the broker's container, so it asks serve's port.
+func Health(
+	args []string,
+	stdout io.Writer,
+	stderr io.Writer,
+) int {
+	p := printer{
+		stdout:     stdout,
+		stderr:     stderr,
+		subcommand: "health",
+	}
+	if len(args) != 1 {
+		return p.refuseArguments(
+			nil,
+			errors.New("health needs a manifest"),
+		)
+	}
+	m, _, err := manifest.ReadAndValidate(args[0])
+	if err != nil {
+		return p.refuseArguments(nil, err)
+	}
+	brokerURL := strings.TrimSuffix(os.Getenv(m.BrokerURLEnv), "/")
+	if brokerURL == "" {
+		brokerURL = localBrokerURL
+	}
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		healthTimeout,
+	)
+	defer cancel()
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		brokerURL+wire.ReadyzRoute,
+		nil,
+	)
+	if err != nil {
+		return p.printReply(describeMissingReply(false, false, err))
+	}
+	// /readyz replies only {"result":"ok"} or a short error, so 4 KiB is plenty.
+	reply, _, err := sendRequest(req, replyEnvelopeBytes)
+	if err != nil {
+		reply = describeMissingReply(false, false, err)
 	}
 	return p.printReply(reply)
 }

@@ -30,6 +30,12 @@ It prints one JSON object on stdout: the broker's reply, or a body the client bu
 
 A mutation that gets no usable reply after connecting is `change-unknown`, because the broker may already have run it. It is `broker-unavailable` with `write: not-sent` only when the client never connected. A mutation reply whose `write` does not show whether the change happened is printed as `change-unknown` too.
 
+`neurokit run <manifest> <command> --flags` sends the same request with flags built from the manifest: `slot_id` becomes `--slot-id`, a boolean is a bare flag, and a list is a repeated flag. An object, or a list of objects or lists, needs `call`. Both print and exit the same way.
+
+`neurokit health <manifest>` asks the broker's `/readyz` and waits at most 3 s. When the URL variable is unset or empty, it asks `http://127.0.0.1:8080`, where `serve` listens inside a broker container. Its output and exit status follow `call`'s.
+
+`neurokit help <manifest>` lists the commands, and `neurokit help <manifest> <command>` lists one command's flags; `--help` after a command prints that command's flags. With no manifest, `help` prints the version and the usage line.
+
 ## Layout
 
 The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; there is no public Go library. Each package owns one concern:
@@ -38,8 +44,8 @@ The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; ther
 - `internal/manifest`: the manifest format: reading and validating `manifest.json`, and checking each request's arguments and approval label against it.
 - `internal/broker`: turning an HTTP request into a handler run and a reply: request checks, handler slots and the write lock, and building the reply from what the handler did.
 - `internal/runner`: running one handler process and reporting what it did: its own process group, killed at the deadline and after it exits, the answer on file descriptor 3, capped output logs and a private `TMPDIR`.
-- `internal/cli`: the client: checking a command's arguments against the manifest before sending them, and turning the broker's reply, or the lack of one, into stdout, stderr and an exit status.
-- `cmd/neurokit`: the binary: `serve` checks the manifest and the tool's `check` program, connects the broker to the runner, and stops both on `SIGTERM`. `call` goes to `internal/cli`.
+- `internal/cli`: the client: checking a command's arguments against the manifest before sending them, turning the broker's reply, or the lack of one, into stdout, stderr and an exit status, printing help, and asking whether a broker is ready.
+- `cmd/neurokit`: the binary: `serve` checks the manifest and the tool's `check` program, connects the broker to the runner, and stops both on `SIGTERM`. `run`, `call`, `help` and `health` go to `internal/cli`.
 
 Packages import each other in one direction only. `internal/imports_test.go` lists what each package may import, and fails when a package imports an internal package outside its row or has no row at all.
 

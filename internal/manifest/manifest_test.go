@@ -123,6 +123,12 @@ func TestUnsafeManifestsAreRejected(t *testing.T) {
 			want:    `"approval" is reserved`,
 		},
 		{
+			name:    "argument named help",
+			replace: `"player": {`,
+			with:    `"help": {`,
+			want:    `"help" is reserved`,
+		},
+		{
 			name:    "approval on a read",
 			replace: `"lookup": {`,
 			with:    `"lookup": {"approval": true,`,
