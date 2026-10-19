@@ -7,7 +7,7 @@ import subprocess
 from neurokit.answer import Done, Fail
 
 
-def call(manifest: str | os.PathLike, command: str, /, **args) -> object:
+def call(manifest: str | os.PathLike[str], command: str, /, **args) -> object:
     """Runs one command and returns what its function returned.
 
     The ``neurokit`` binary on PATH checks the arguments against the

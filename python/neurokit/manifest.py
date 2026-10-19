@@ -38,7 +38,7 @@ def build_manifest(tool, module_name):
             line, such as ``f(name): the manifest cannot hold ['minLength']``.
     """
     runner = ["python3", "-m", "neurokit"]
-    manifest = {
+    return {
         "name": tool.name,
         "spec": SPEC,
         "broker_url_env": tool.broker_url_env,
@@ -50,7 +50,6 @@ def build_manifest(tool, module_name):
             for name, command in sorted(tool.commands.items())
         },
     }
-    return manifest
 
 
 def build_command_entry(command):

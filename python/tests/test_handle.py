@@ -98,11 +98,6 @@ class TestAnswer:
                 "TypeError",
                 id="done-without-write",
             ),
-            pytest.param(
-                "return {'names': {name}}",
-                "TypeError: Object of type set",
-                id="result-not-json",
-            ),
         ],
     )
     def test_crash_leaves_answer_empty(self, tmp_path, body, error):

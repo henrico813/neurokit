@@ -87,7 +87,7 @@ class TestManifest:
             ),
         ],
     )
-    def test_refuses_limit_manifest_cannot_hold(self, hint, error):
+    def test_refuses_hints_manifest_cannot_express(self, hint, error):
         """A limit with no place in the manifest stops the build.
 
         Dropping it would leave the author believing the broker enforces

@@ -38,29 +38,52 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 
 ## Python tools
 
-`python/neurokit` is the library a Python tool is written in, so no tool writes its own manifest or answer pipe. It needs Python 3.12 or later and installs pydantic: `pip install ./python`.
+`python/neurokit` is a Python library for writing a tool as plain functions. It writes the tool's manifest and answers the broker's requests, so the tool has no code of its own for either. It needs Python 3.12 or later and installs pydantic: `pip install ./python`.
 
-A tool module defines one `Tool`. Each command is a function named after it, with `_` as `-`, and its arguments' limits are pydantic `Field`s:
+A tool module defines one `Tool`. Each command is a function. The command's name is the function's name with `_` changed to `-`, so `save_greeting` becomes `save-greeting`.
+
+Every argument needs a type hint. A `str` needs `Field(max_length=...)`, an `int` needs `Field(ge=..., le=...)`, and a list needs `Field(max_length=...)`, because the broker checks these limits before your code runs. An object argument is a `TypedDict`, and the function gets a dict.
 
 ```python
-tool = Tool("greeter",
-            broker_url_env="GREETER_URL",
-            max_handlers=1)
+from typing import Annotated
 
-@tool.command(deadline_ms=5_000,
-              max_body_bytes=1_000,
-              max_response_bytes=1_000)
+from pydantic import Field
+
+from neurokit import Tool
+
+tool = Tool(
+    "greeter",
+    broker_url_env="GREETER_URL",
+    max_handlers=1,
+)
+
+
+@tool.command(
+    deadline_ms=5_000,
+    max_body_bytes=1_000,
+    max_response_bytes=1_000,
+)
 def greet(
     name: Annotated[str, Field(max_length=20)],
 ) -> dict:
     return {"greeting": f"hello {name}"}
 ```
 
-A function returns its result or raises `Fail(code, message)`; any other exception is a crash. A mutation returns `Done(result, write=...)` or raises `Fail(..., write=...)`, with `write` set to `NOT_SENT`, `SENT` or `VERIFIED`. `Done` has no default `write`, so a forgotten one reaches the caller as `change-unknown`.
+A function returns its result, or raises `Fail(code, message)` for a failure the caller should understand. `code` is a shared code such as `invalid-request`, or one listed in the command's `errors=[...]`. Any other exception is a crash: the caller gets `unexpected` (`change-unknown` for a mutating command), and the traceback goes only to the broker's log.
 
-`python -m neurokit manifest greeter manifest.json` writes the manifest, which the tool commits. It refuses, in one line, a limit the manifest cannot hold, such as `min_length`.
+A mutating command (`mutating=True`) returns `Done(result, write=...)` or raises `Fail(..., write=...)`, with `write` set to `NOT_SENT`, `SENT` or `VERIFIED`. `Done` has no default `write`, so a forgotten one reaches the caller as `change-unknown`.
 
-On the caller's side, `neurokit.call(manifest, command, **args)` runs `neurokit call` and returns what the function returned, or raises its `Fail`.
+`python -m neurokit manifest greeter manifest.json` imports the module `greeter` and writes its manifest. Commit the file next to the code. If a type hint has no place in the manifest, such as `Field(min_length=1)`, the command prints one line naming the parameter and writes no file.
+
+On the caller's side, `neurokit.call(...)` runs the `neurokit call` binary, which must be on `PATH`. It returns what the function returned (a `Done` for a mutating command). On an error, from the function, the broker or the binary, it raises `Fail`.
+
+```python
+result = neurokit.call(
+    "/opt/greeter/manifest.json",
+    "greet",
+    name="Ann",
+)
+```
 
 ## Layout
 
