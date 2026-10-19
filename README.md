@@ -36,6 +36,70 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 
 `neurokit help <manifest>` lists the commands, and `neurokit help <manifest> <command>` lists one command's flags; `--help` after a command prints that command's flags. With no manifest, `help` prints the version and the usage line.
 
+## Python tools
+
+`python/neurokit` is a Python library for writing a tool as plain functions. It writes the tool's manifest and answers the broker's requests, so the tool has no code of its own for either. Install it with `pip install ./python`; it needs Python 3.12 or later, brings pydantic, and shows in pip as `neurokit-broker`.
+
+A tool module defines one `Broker`. Each command is a function. The command's name is the function's name with `_` changed to `-`, so `save_greeting` becomes `save-greeting`.
+
+Every argument needs a type hint. A `str` needs `Field(max_length=...)`, an `int` needs `Field(ge=..., le=...)`, and a list needs `Field(max_length=...)`, because the broker checks these limits before your code runs. An object argument is a `TypedDict`, and the function gets a dict.
+
+A default value on the parameter makes the argument optional; `Field(default=...)` is refused.
+
+```python
+from typing import Annotated
+
+from neurokit import Broker
+from pydantic import Field
+
+broker = Broker(
+    "greeter",
+    broker_url_env="GREETER_URL",
+    max_handlers=1,
+)
+
+
+@broker.command(
+    deadline_ms=5_000,
+    max_body_bytes=1_000,
+    max_response_bytes=1_000,
+)
+def greet(
+    name: Annotated[str, Field(max_length=20)],
+) -> dict:
+    return {"greeting": f"hello {name}"}
+```
+
+Import `Done`, `Fail` and the `write` values from `neurokit`.
+
+A function returns its result, or raises `Fail(code, message)` for a failure the caller should understand. Any other exception is a crash: the caller gets `unexpected` (`change-unknown` for a mutating command), and the traceback goes only to the broker's log.
+
+`code` must be a shared code, one of `invalid-request`, `forbidden`, `not-found`, `unexpected`, `provider-unavailable`, `provider-rejected`, `change-unknown` and `verification-failed`, or one listed in the command's `errors=[...]`. Any other code reaches the caller as `unexpected`.
+
+A mutating command (`mutating=True`) returns `Done(result, write=VERIFIED)` once it has confirmed the change, or `Done(result, write=NOT_SENT)` when it sent nothing, such as for a preview. A failure raises `Fail(..., write=NOT_SENT)` or `Fail(..., write=SENT)`, and `verification-failed` needs `SENT`.
+
+Any other pairing reaches the caller as `change-unknown`: a plain return value, a `Done` with `SENT` or no `write`, a `Fail` with `VERIFIED` or no `write`, or `verification-failed` without `SENT`.
+
+`python -m neurokit manifest greeter manifest.json` imports the module `greeter` and writes its manifest. Commit the file next to the code. If a type hint has no place in the manifest, such as `Field(min_length=1)`, the command prints one line naming the parameter and writes no file.
+
+In the broker container, `neurokit serve manifest.json` runs `python3 -m neurokit handle greeter` for each request. So `python3` must have this library installed and must be able to import `greeter`, for example from the folder `serve` starts in or through `PYTHONPATH`.
+
+`@broker.check` marks a function that `serve` runs once at start, such as reading a secret. If it raises, `serve` stops with the exception's last line as the reason.
+
+On the caller's side, `neurokit.call(...)` runs the `neurokit call` binary, which must be on `PATH`. The variable that `broker_url_env` names, here `GREETER_URL`, must hold the broker's URL, as "Calling a broker" above describes.
+
+It returns what the function returned (a `Done` for a mutating command). On an error, from the function, the broker or the binary, it raises `Fail`.
+
+```python
+import neurokit
+
+result = neurokit.call(
+    "/opt/greeter/manifest.json",
+    "greet",
+    name="Ann",
+)
+```
+
 ## Layout
 
 The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; there is no public Go library. Each package owns one concern:
@@ -49,6 +113,8 @@ The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; ther
 
 Packages import each other in one direction only. `internal/imports_test.go` lists what each package may import, and fails when a package imports an internal package outside its row or has no row at all.
 
+Outside Go, `python/neurokit` is the Python library, and `python/tests` holds its tests.
+
 ## Development
 
 The module needs Go 1.27.2, or Go 1.21 or later with the default `GOTOOLCHAIN=auto`, which downloads it. Run the same checks as CI; `gofmt -l .` prints nothing when every file is formatted:
@@ -57,6 +123,13 @@ The module needs Go 1.27.2, or Go 1.21 or later with the default `GOTOOLCHAIN=au
 gofmt -l .
 go vet ./...
 go test ./...
+```
+
+The Python tests need Go too, because they build `serve` and start it on port 8080:
+
+```sh
+pip install ./python pytest
+python -m pytest python/tests
 ```
 
 `.github/workflows/ci.yml` runs them on every pull request and every push to `main`.
