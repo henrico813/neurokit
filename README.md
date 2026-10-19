@@ -36,6 +36,31 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 
 `neurokit help <manifest>` lists the commands, and `neurokit help <manifest> <command>` lists one command's flags; `--help` after a command prints that command's flags. With no manifest, `help` prints the version and the usage line.
 
+## Python handlers
+
+`python/neurokit_handler/` is the handler shim: a small standard-library package that turns a tool's Python functions into a handler. A manifest runs `python -m neurokit_handler <module>` as its `program`, and the same with `--check` before the module as its `check`.
+
+For each request, the shim calls the module's function named after the command, with `-` as `_`, and passes the arguments by name. The return value becomes the result, and `Fail(code, message)` becomes the error, with exit 1. Any other exception is a crash, and its traceback goes only to the broker's log.
+
+A mutating function returns `Done`, such as `Done(result, write=VERIFIED)`, and raises `Fail`, such as `Fail(code, message, write=SENT)`, with the shim's constants for the four `write` values. The shim never fills in a missing `write`, so the broker reports `change-unknown` instead of a guess.
+
+At start, `--check` imports the module and calls its `check()`, where a tool checks its secrets, so a missing one stops the broker with a one-line reason.
+
+`examples/echo` is a small broker on the shim, with a read, `echo`, and a mutation, `set-greeting`. Run it from `examples/`:
+
+```sh
+PYTHONPATH=../python \
+  neurokit serve echo/manifest.json
+```
+
+Then, in another shell in `examples/`:
+
+```sh
+export ECHO_URL=http://127.0.0.1:8080
+neurokit run echo/manifest.json \
+  echo --text=hi
+```
+
 ## Layout
 
 The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; there is no public Go library. Each package owns one concern:
@@ -49,6 +74,8 @@ The binary is `cmd/neurokit`. All other Go code is in `internal/` packages; ther
 
 Packages import each other in one direction only. `internal/imports_test.go` lists what each package may import, and fails when a package imports an internal package outside its row or has no row at all.
 
+Outside Go, `python/` holds the handler shim and its tests, and `examples/echo` the example broker.
+
 ## Development
 
 The module needs Go 1.27.2, or Go 1.21 or later with the default `GOTOOLCHAIN=auto`, which downloads it. Run the same checks as CI; `gofmt -l .` prints nothing when every file is formatted:
@@ -59,9 +86,15 @@ go vet ./...
 go test ./...
 ```
 
+The shim's tests need pytest; CI's `python` job runs them on Python 3.11 and 3.12:
+
+```sh
+python3 -m pytest python/tests
+```
+
 `.github/workflows/ci.yml` runs them on every pull request and every push to `main`.
 
-The container test needs Docker on Linux: `sh test/container/run.sh`. It runs `serve` in a Python image with a real handler, and checks that `serve` refuses to start without an init process, leaves no processes behind and stops quickly on `docker stop`. It prints each request's time; CI runs it as the `container` job.
+The container test needs Docker on Linux: `sh test/container/run.sh`. It runs `serve` in a Python image with a real handler on the shim, and checks that `serve` refuses to start without an init process, leaves no processes behind and stops quickly on `docker stop`. It prints each request's time; CI runs it as the `container` job.
 
 ## License
 

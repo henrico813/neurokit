@@ -3,8 +3,8 @@
   "spec": 1,
   "broker_url_env": "CONTAINER_TEST_URL",
   "max_handlers": 1,
-  "program": ["python", "/opt/tool/handler.py"],
-  "check": ["python", "-c", "import google.genai"],
+  "program": ["python", "-m", "neurokit_handler", "handler"],
+  "check": ["python", "-m", "neurokit_handler", "--check", "handler"],
   "commands": {
     "ask": {
       "max_body_bytes": 1024,

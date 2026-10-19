@@ -12,5 +12,8 @@ FROM python:3.12-slim
 # real handler's start-up cost.
 RUN pip install --no-cache-dir google-genai==1.38.0
 COPY --from=build /neurokit /usr/local/bin/neurokit
+COPY python/neurokit_handler /opt/tool/neurokit_handler/
 COPY test/container/manifest.json test/container/handler.py /opt/tool/
+# python -m finds the shim and the handler in the working folder.
+WORKDIR /opt/tool
 ENTRYPOINT ["neurokit", "serve", "/opt/tool/manifest.json"]
