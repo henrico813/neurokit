@@ -80,14 +80,16 @@ def build_command_entry(command):
 
 
 def drop_none_option(schema, default, where):
-    """Returns X's schema for a parameter typed ``X | None = None``, and any
-    other schema as is.
+    """Returns X's schema for a parameter typed ``X | None = None``, and a
+    schema that is not a union as is.
 
-    The broker refuses null, so the function gets a value or its default.
+    The manifest holds only X, because the broker refuses null; the function
+    gets a value or its default None.
 
     Raises:
         ValueError: The parameter is any other union, ``X | None`` without
-            the default None, or has a union-level key such as ``default``.
+            the default None, or sets a key on the whole union, such as
+            ``Field(default=...)``.
     """
     if "anyOf" not in schema:
         return schema
