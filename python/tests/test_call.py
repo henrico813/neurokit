@@ -121,3 +121,19 @@ class TestCall:
         failure = raised.value
         assert (failure.code, failure.write) == ("empty-greeting", "not-sent")
         assert failure.request_id.startswith("req-")
+
+    def test_leaves_out_none_arguments(self, greeter_manifest):
+        """An argument passed None is not sent, so it counts as not given.
+
+        Fantasy passes ``drop_player=None`` when nothing is dropped. Sent
+        as null, the binary refuses it; a required argument passed None
+        must still be refused, as missing.
+        """
+        result = neurokit.call(
+            greeter_manifest, "greet", name="Ann", title=None
+        )
+        with pytest.raises(neurokit.Fail) as raised:
+            neurokit.call(greeter_manifest, "greet", name=None)
+
+        assert result == {"greeting": "hello Ann"}
+        assert raised.value.message == "name is required"

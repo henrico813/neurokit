@@ -68,14 +68,42 @@ def build_command_entry(command):
         if param.name not in hints:
             raise ValueError(f"{where}: needs a type hint")
         schema = TypeAdapter(hints[param.name]).json_schema()
+        defs = schema.get("$defs", {})
         args[param.name] = to_manifest_arg(
-            schema, schema.get("$defs", {}), where
+            drop_none_option(schema, param.default, where), defs, where
         )
         if param.default is not param.empty:
             args[param.name]["optional"] = True
     if args:
         entry["args"] = args
     return entry
+
+
+def drop_none_option(schema, default, where):
+    """Returns X's schema for a parameter typed ``X | None = None``, and a
+    schema that is not a union as is.
+
+    The manifest holds only X, because the broker refuses null; the function
+    gets a value or its default None.
+
+    Raises:
+        ValueError: The parameter is any other union, ``X | None`` without
+            the default None, or sets a key on the whole union, such as
+            ``Field(default=...)``.
+    """
+    if "anyOf" not in schema:
+        return schema
+    unmapped = set(schema) - {"anyOf"} - IGNORED_KEYS
+    if unmapped:
+        raise ValueError(
+            f"{where}: the manifest cannot hold {sorted(unmapped)}"
+        )
+    options = [
+        option for option in schema["anyOf"] if option != {"type": "null"}
+    ]
+    if default is not None or len(options) != 1:
+        raise ValueError(f"{where}: a union must be X | None = None")
+    return options[0]
 
 
 def to_manifest_arg(schema, defs, where):

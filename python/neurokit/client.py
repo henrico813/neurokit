@@ -12,6 +12,8 @@ def call(manifest: str | os.PathLike[str], command: str, /, **args) -> object:
 
     The ``neurokit`` binary on PATH checks the arguments against the
     manifest and sends them to the broker. A mutation returns ``Done``.
+    An argument passed None is left out, so an optional one takes its
+    default and a required one is refused as missing.
 
     Example::
 
@@ -21,8 +23,10 @@ def call(manifest: str | os.PathLike[str], command: str, /, **args) -> object:
         Fail: The command, the broker or the binary replied with an error.
         FileNotFoundError: No ``neurokit`` binary is on PATH.
     """
+    # The broker refuses null, so None can only mean "not given".
+    sent = {name: value for name, value in args.items() if value is not None}
     finished = subprocess.run(
-        ["neurokit", "call", os.fspath(manifest), command, json.dumps(args)],
+        ["neurokit", "call", os.fspath(manifest), command, json.dumps(sent)],
         capture_output=True,
         text=True,
         encoding="utf-8",

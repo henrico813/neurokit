@@ -44,7 +44,7 @@ A tool module defines one `Broker`. Each command is a function. The command's na
 
 Every argument needs a type hint. A `str` needs `Field(max_length=...)`, an `int` needs `Field(ge=..., le=...)`, and a list needs `Field(max_length=...)`, because the broker checks these limits before your code runs. An object argument is a `TypedDict`, and the function gets a dict.
 
-A default value on the parameter makes the argument optional; `Field(default=...)` is refused.
+A default value on the parameter makes the argument optional; `Field(default=...)` is refused. A parameter typed `X | None = None` is an optional `X`, so the function gets a value or `None`; any other union is refused.
 
 ```python
 from typing import Annotated
@@ -88,7 +88,7 @@ In the broker container, `neurokit serve manifest.json` runs `python3 -m neuroki
 
 On the caller's side, `neurokit.call(...)` runs the `neurokit call` binary, which must be on `PATH`. The variable that `broker_url_env` names, here `GREETER_URL`, must hold the broker's URL, as "Calling a broker" above describes.
 
-It returns what the function returned (a `Done` for a mutating command). On an error, from the function, the broker or the binary, it raises `Fail`.
+It returns what the function returned (a `Done` for a mutating command). On an error, from the function, the broker or the binary, it raises `Fail`. An argument passed `None` is left out, as if not given.
 
 ```python
 import neurokit

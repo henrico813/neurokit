@@ -22,9 +22,14 @@ def check():
 @broker.command(
     deadline_ms=5_000, max_body_bytes=1_000, max_response_bytes=1_000
 )
-def greet(name: Annotated[str, Field(max_length=20)]) -> dict:
-    """Returns a greeting for name."""
-    return {"greeting": f"hello {name}"}
+def greet(
+    name: Annotated[str, Field(max_length=20)],
+    title: Annotated[str, Field(max_length=10)] | None = None,
+) -> dict:
+    """Returns a greeting for name, with title when one is given."""
+    if title is None:
+        return {"greeting": f"hello {name}"}
+    return {"greeting": f"hello {title} {name}"}
 
 
 @broker.command(
