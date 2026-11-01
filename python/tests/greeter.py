@@ -23,7 +23,7 @@ def check():
     deadline_ms=5_000, max_body_bytes=1_000, max_response_bytes=1_000
 )
 def greet(
-    name: Annotated[str, Field(max_length=20)],
+    name: Annotated[str, Field(min_length=1, max_length=20)],
     title: Annotated[str, Field(max_length=10)] | None = None,
 ) -> dict:
     """Returns a greeting for name, with title when one is given."""

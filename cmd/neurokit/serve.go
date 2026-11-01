@@ -50,11 +50,18 @@ func serveBroker(
 	if err := handlers.runCheckProgram(stop, "check", m.Check); err != nil {
 		return err
 	}
-	log.Info("serve_start", "version", readVersion(), "spec", m.Spec)
 	ln, err := listen()
 	if err != nil {
 		return err
 	}
+	// With port 0 the system picks the port, and addr is the only place a
+	// caller learns it.
+	log.Info(
+		"serve_start",
+		"version", readVersion(),
+		"spec", m.Spec,
+		"addr", ln.Addr().String(),
+	)
 
 	srv := buildHTTPServer(
 		m,

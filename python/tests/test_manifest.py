@@ -38,17 +38,18 @@ class TestManifest:
         """
 
         def plan(
-            name: Annotated[str, Field(max_length=20)],
+            name: Annotated[str, Field(min_length=1, max_length=20)],
             count: Annotated[int, Field(ge=1, le=50)],
             slots: Annotated[list[Slot], Field(max_length=7)],
             dry_run: bool = False,
             label: Annotated[str, Field(max_length=30)] | None = None,
-        ): ...
+        ):
+            """Takes one argument of each kind the manifest holds."""
 
         args = build_args(plan)
 
         assert args == {
-            "name": {"type": "string", "max_length": 20},
+            "name": {"type": "string", "max_length": 20, "min_length": 1},
             "count": {"type": "integer", "min": 1, "max": 50},
             "slots": {
                 "type": "list",
@@ -73,8 +74,8 @@ class TestManifest:
         ("hint", "error"),
         [
             pytest.param(
-                Annotated[str, Field(min_length=1, max_length=5)],
-                "the manifest cannot hold ['minLength']",
+                Annotated[str, Field(pattern="^a", max_length=5)],
+                "the manifest cannot hold ['pattern']",
                 id="limit-without-manifest-key",
             ),
             pytest.param(
@@ -95,8 +96,7 @@ class TestManifest:
         ],
     )
     def test_refuses_hints_manifest_cannot_express(self, hint, error):
-        """A type hint the manifest cannot express is refused with a message
-        naming the parameter.
+        """A hint the manifest cannot express is refused, naming the parameter.
 
         Writing the manifest anyway would drop a limit the author set, or
         leave out one the broker requires.

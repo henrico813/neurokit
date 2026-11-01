@@ -44,6 +44,8 @@ A tool module defines one `Broker`. Each command is a function. The command's na
 
 Every argument needs a type hint. A `str` needs `Field(max_length=...)`, an `int` needs `Field(ge=..., le=...)`, and a list needs `Field(max_length=...)`, because the broker checks these limits before your code runs. An object argument is a `TypedDict`, and the function gets a dict.
 
+`Field(min_length=1)` on a `str` makes the broker refuse empty text. Text of only spaces still passes, so a function that needs non-blank text checks for that itself.
+
 A default value on the parameter makes the argument optional; `Field(default=...)` is refused. A parameter typed `X | None = None` is an optional `X`, so the function gets a value or `None`; any other union is refused.
 
 ```python
@@ -80,15 +82,19 @@ A mutating command (`mutating=True`) returns `Done(result, write=VERIFIED)` once
 
 Any other pairing reaches the caller as `change-unknown`: a plain return value, a `Done` with `SENT` or no `write`, a `Fail` with `VERIFIED` or no `write`, or `verification-failed` without `SENT`.
 
-`python -m neurokit manifest greeter manifest.json` imports the module `greeter` and writes its manifest. Commit the file next to the code. If a type hint has no place in the manifest, such as `Field(min_length=1)`, the command prints one line naming the parameter and writes no file.
+`python -m neurokit manifest greeter manifest.json` imports the module `greeter` and writes its manifest. Commit the file next to the code. If a type hint has no place in the manifest, such as `Field(pattern=...)`, the command prints one line naming the parameter and writes no file.
 
 In the broker container, `neurokit serve manifest.json` runs `python3 -m neurokit handle greeter` for each request. So `python3` must have this library installed and must be able to import `greeter`, for example from the folder `serve` starts in or through `PYTHONPATH`.
+
+`serve` listens on `0.0.0.0:8080` by default. `neurokit serve --listen 127.0.0.1:9000 manifest.json` listens on another address. Port 0 takes a free port, which the `serve_start` log entry shows as `addr`.
 
 `@broker.check` marks a function that `serve` runs once at start, such as reading a secret. If it raises, `serve` stops with the exception's last line as the reason.
 
 On the caller's side, `neurokit.call(...)` runs the `neurokit call` binary, which must be on `PATH`. The variable that `broker_url_env` names, here `GREETER_URL`, must hold the broker's URL, as "Calling a broker" above describes.
 
 It returns what the function returned (a `Done` for a mutating command). On an error, from the function, the broker or the binary, it raises `Fail`. An argument passed `None` is left out, as if not given.
+
+A `Fail` whose `code` is not in `neurokit.SHARED_CODES` came from the command's `errors=[...]`. If the binary stops without a readable reply, `call` raises `Fail` with `broker-unavailable`, or with `change-unknown`, and `write` set to `unknown`, for a mutating command.
 
 ```python
 import neurokit
@@ -98,6 +104,15 @@ result = neurokit.call(
     "greet",
     name="Ann",
 )
+```
+
+A tool's own tests can run its real broker with `neurokit.testing.serve_broker`. It needs the `neurokit` binary on `PATH`, starts `neurokit serve` on a free local port and yields the URL, which the test puts in the `broker_url_env` variable:
+
+```python
+from neurokit.testing import serve_broker
+
+with serve_broker("manifest.json") as url:
+    monkeypatch.setenv("GREETER_URL", url)
 ```
 
 ## Layout
@@ -125,7 +140,7 @@ go vet ./...
 go test ./...
 ```
 
-The Python tests need Go too, because they build `serve` and start it on port 8080:
+The Python tests need Go too, because they build `serve` and start it on a free port:
 
 ```sh
 pip install ./python pytest

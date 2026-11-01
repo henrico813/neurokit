@@ -33,7 +33,7 @@ const validManifest = `{
       "max_response_bytes": 8192,
       "deadline_ms": 2000,
       "args": {
-        "player": {"type": "string", "max_length": 10},
+        "player": {"type": "string", "min_length": 1, "max_length": 10},
         "slot": {"type": "integer", "min": 1, "max": 9},
         "tags": {"type": "list", "items": {"type": "string", "max_length": 5}, "max_items": 2},
         "move": {"type": "object", "optional": true, "fields": {"to": {"type": "string", "max_length": 5}}}
@@ -157,6 +157,18 @@ func TestUnsafeManifestsAreRejected(t *testing.T) {
 			replace: `"min": 1, "max": 9}`,
 			with:    `"min": 1}`,
 			want:    "integer needs min and max",
+		},
+		{
+			name:    "negative min_length",
+			replace: `"min_length": 1,`,
+			with:    `"min_length": -1,`,
+			want:    "min_length must be from 0 to max_length",
+		},
+		{
+			name:    "min_length above max_length",
+			replace: `"min_length": 1,`,
+			with:    `"min_length": 11,`,
+			want:    "min_length must be from 0 to max_length",
 		},
 		{
 			name:    "unknown argument type",

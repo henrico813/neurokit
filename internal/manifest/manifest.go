@@ -61,6 +61,7 @@ type Command struct {
 type Arg struct {
 	Type      string         `json:"type"`
 	Optional  bool           `json:"optional"`
+	MinLength int            `json:"min_length"`
 	MaxLength int            `json:"max_length"`
 	Min       *int64         `json:"min"`
 	Max       *int64         `json:"max"`
@@ -221,6 +222,9 @@ func validateArgTypeAndBounds(a Arg) error {
 	case "string":
 		if a.MaxLength <= 0 {
 			return errors.New("string needs a positive max_length")
+		}
+		if a.MinLength < 0 || a.MinLength > a.MaxLength {
+			return errors.New("string min_length must be from 0 to max_length")
 		}
 	case "integer":
 		if a.Min == nil || a.Max == nil || *a.Min > *a.Max {
