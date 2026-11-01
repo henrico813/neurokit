@@ -83,7 +83,7 @@ func describeArg(a manifest.Arg) string {
 	case isNestedArg(a):
 		text = "nested values; use neurokit call"
 	case a.Type == "string":
-		text = fmt.Sprintf("text of at most %d characters", a.MaxLength)
+		text = a.DescribeText()
 	case a.Type == "integer":
 		text = fmt.Sprintf("whole number from %d to %d", *a.Min, *a.Max)
 	case a.Type == "boolean":

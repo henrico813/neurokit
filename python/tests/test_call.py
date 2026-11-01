@@ -1,19 +1,16 @@
-"""Tests for call, against a real neurokit serve running the greeter tool."""
+"""Tests for call and serve_broker, mostly against the greeter test tool."""
 
 import os
 import subprocess
 import sys
-import time
-import urllib.request
 from pathlib import Path
 
 import pytest
 
 import neurokit
+from neurokit.testing import serve_broker
 
 TESTS_DIR = Path(__file__).resolve().parent
-# serve always listens on port 8080.
-BROKER_URL = "http://127.0.0.1:8080"
 
 
 @pytest.fixture(scope="module")
@@ -35,45 +32,42 @@ def greeter_manifest(tmp_path_factory):
         # serve runs python3, which must be this one, with pydantic.
         python_bin = Path(sys.executable).parent
         env.setenv("PATH", f"{work}:{python_bin}:{os.environ['PATH']}")
-        env.setenv("PYTHONPATH", str(TESTS_DIR.parent))
+        # The handler imports neurokit from python/ and greeter from tests/.
+        env.setenv("PYTHONPATH", f"{TESTS_DIR.parent}:{TESTS_DIR}")
         env.setenv("GREETER_DIR", str(work))
-        env.setenv("GREETER_URL", BROKER_URL)
         subprocess.run(
             [sys.executable, "-m", "neurokit", "manifest", "greeter", path],
             cwd=TESTS_DIR,
             check=True,
         )
-        with open(work / "serve.log", "w") as log:
-            serve = subprocess.Popen(
-                ["neurokit", "serve", path],
-                cwd=TESTS_DIR,
-                stdout=log,
-                stderr=log,
-            )
-            try:
-                wait_until_ready(serve, work / "serve.log")
-                yield path
-            finally:
-                serve.terminate()
-                try:
-                    serve.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve.kill()
-                    serve.wait()
+        with serve_broker(path) as url:
+            env.setenv("GREETER_URL", url)
+            yield path
 
 
-def wait_until_ready(serve, log_path):
-    """Fails the test unless serve answers /readyz within about 10 s."""
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        if serve.poll() is not None:
-            pytest.fail(f"serve stopped: {log_path.read_text()}")
-        try:
-            urllib.request.urlopen(f"{BROKER_URL}/readyz", timeout=1)
-            return
-        except OSError:
-            time.sleep(0.1)
-    pytest.fail(f"serve did not get ready: {log_path.read_text()}")
+class TestServeBroker:
+    """Starting a real broker for a tool's own tests."""
+
+    def test_raises_with_reason_when_serve_stops(
+        self, greeter_manifest, tmp_path, monkeypatch
+    ):
+        """serve_broker raises with serve's reason if the broker cannot start.
+
+        A start-up check can fail when a tool's tests start its real broker,
+        such as when a secret is missing. Without the reason, the author sees
+        only a timeout or a refused connection.
+        """
+        # Point the test tool's start-up check at an empty folder, so its
+        # secret is missing.
+        monkeypatch.setenv("GREETER_DIR", str(tmp_path))
+
+        with (
+            pytest.raises(RuntimeError) as raised,
+            serve_broker(greeter_manifest),
+        ):
+            pass
+
+        assert "check failed: FileNotFoundError" in str(raised.value)
 
 
 class TestCall:
@@ -137,3 +131,31 @@ class TestCall:
 
         assert result == {"greeting": "hello Ann"}
         assert raised.value.message == "name is required"
+
+    @pytest.mark.parametrize(
+        ("command", "code", "write"),
+        [
+            pytest.param("greet", "broker-unavailable", None, id="read"),
+            pytest.param(
+                "save-greeting", "change-unknown", "unknown", id="mutation"
+            ),
+        ],
+    )
+    def test_raises_fail_when_binary_is_killed(
+        self, greeter_manifest, tmp_path, monkeypatch, command, code, write
+    ):
+        """call raises Fail when the binary is killed before it replies.
+
+        A caller that handles only Fail would crash on a JSON error. A
+        killed mutation may already have made its change, so it must never
+        read as broker-unavailable, which callers retry.
+        """
+        binary = tmp_path / "neurokit"
+        binary.write_text("#!/bin/sh\nkill -9 $$\n")
+        binary.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+
+        with pytest.raises(neurokit.Fail) as raised:
+            neurokit.call(greeter_manifest, command)
+
+        assert (raised.value.code, raised.value.write) == (code, write)

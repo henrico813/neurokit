@@ -1,17 +1,20 @@
-"""Tests for answering a request, run the way neurokit serve runs it.
+"""Tests for answering a request.
 
-Each test starts ``python -m neurokit handle`` with a pipe at file 3 and
-sees what the broker sees: the exit status, the answer and stderr.
+Most tests start ``python -m neurokit handle`` with a pipe at file 3 and
+see what the broker sees: the exit status, the answer and stderr.
 """
 
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
 
 import pytest
+
+import neurokit
 
 PYTHON_DIR = Path(__file__).resolve().parents[1]
 
@@ -123,3 +126,20 @@ class TestAnswer:
         process, written = handle_request(tmp_path, body)
 
         assert json.loads(written) == {"result": False}
+
+
+class TestSharedCodes:
+    """The codes a caller tells apart from a tool's own."""
+
+    def test_matches_codes_in_go(self):
+        """SHARED_CODES holds exactly the codes the Go wire package defines.
+
+        A caller reads any code outside the set as the tool's own. A code
+        added in Go but missing here would make a neurokit refusal look like
+        the tool's answer.
+        """
+        source = (PYTHON_DIR.parent / "internal/wire/codes.go").read_text()
+
+        go_codes = set(re.findall(r'Code\w+\s+= "([a-z-]+)"', source))
+
+        assert neurokit.SHARED_CODES == go_codes

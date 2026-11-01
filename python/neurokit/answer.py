@@ -6,6 +6,26 @@ import sys
 from dataclasses import KW_ONLY, dataclass
 
 UNKNOWN, NOT_SENT, SENT, VERIFIED = "unknown", "not-sent", "sent", "verified"
+# The shared codes, sent by neurokit or by any tool. A failure with any
+# other code came from the command's own errors list.
+SHARED_CODES = frozenset(
+    {
+        "invalid-request",
+        "forbidden",
+        "not-found",
+        "method-not-allowed",
+        "request-too-large",
+        "unexpected",
+        "provider-unavailable",
+        "provider-rejected",
+        "change-unknown",
+        "verification-failed",
+        "spec-mismatch",
+        "not-ready",
+        "deadline-exceeded",
+        "broker-unavailable",
+    }
+)
 
 
 @dataclass(frozen=True)

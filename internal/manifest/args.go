@@ -30,7 +30,11 @@ func (c *Command) DecodeAndValidateArgs(raw []byte) (
 		return nil, "", err
 	}
 	if label, ok := args["approval"]; ok && c.Approval {
-		if !isTextWithin(label, maxApprovalLength) {
+		if !isTextWithin(
+			label,
+			0,
+			maxApprovalLength,
+		) {
 			return nil, "", fmt.Errorf(
 				"approval must be text of at most %d characters",
 				maxApprovalLength,
@@ -66,11 +70,15 @@ func validateArgValues(fields map[string]Arg, values map[string]any) error {
 func validateArgValue(name string, a Arg, value any) error {
 	switch a.Type {
 	case "string":
-		if !isTextWithin(value, a.MaxLength) {
+		if !isTextWithin(
+			value,
+			a.MinLength,
+			a.MaxLength,
+		) {
 			return fmt.Errorf(
-				"%s must be text of at most %d characters",
+				"%s must be %s",
 				name,
-				a.MaxLength,
+				a.DescribeText(),
 			)
 		}
 	case "integer":
@@ -117,7 +125,24 @@ func validateArgValue(name string, a Arg, value any) error {
 	return nil
 }
 
-func isTextWithin(value any, maxLength int) bool {
+func isTextWithin(value any, minLength, maxLength int) bool {
 	s, ok := value.(string)
-	return ok && utf8.RuneCountInString(s) <= maxLength
+	length := utf8.RuneCountInString(s)
+	return ok && length >= minLength && length <= maxLength
+}
+
+// Returns a string argument's limits in words, such as "text of 1 to 20
+// characters", for error messages and help.
+func (a Arg) DescribeText() string {
+	if a.MinLength > 0 {
+		return fmt.Sprintf(
+			"text of %d to %d characters",
+			a.MinLength,
+			a.MaxLength,
+		)
+	}
+	return fmt.Sprintf(
+		"text of at most %d characters",
+		a.MaxLength,
+	)
 }

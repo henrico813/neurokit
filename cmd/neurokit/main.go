@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -44,8 +46,12 @@ func main() {
 }
 
 func runServeCommand(args []string) int {
-	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: neurokit serve <manifest>")
+	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	// Port 0 takes a free port, which the serve_start log entry shows as addr.
+	listenAddr := flags.String("listen", "0.0.0.0:8080", "")
+	if flags.Parse(args) != nil || flags.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: neurokit serve [--listen <host:port>] <manifest>")
 		return 2
 	}
 	// docker stop sends SIGTERM, and Ctrl-C in a terminal sends an interrupt;
@@ -57,9 +63,9 @@ func runServeCommand(args []string) int {
 	)
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	listen := func() (net.Listener, error) {
-		return net.Listen("tcp", "0.0.0.0:8080")
+		return net.Listen("tcp", *listenAddr)
 	}
-	if err := serveBroker(stop, args[0], listen, log); err != nil {
+	if err := serveBroker(stop, flags.Arg(0), listen, log); err != nil {
 		fmt.Fprintln(os.Stderr, "neurokit serve:", err)
 		return 1
 	}

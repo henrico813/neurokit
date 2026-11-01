@@ -52,6 +52,11 @@ func TestLooseArgumentsAreRejected(t *testing.T) {
 			want: "slot",
 		},
 		{
+			name: "empty string under min_length",
+			body: `{"player":"","slot":3,"tags":[]}`,
+			want: "player",
+		},
+		{
 			name: "string over max_length",
 			body: `{"player":"kimberlyann","slot":3,"tags":[]}`,
 			want: "player",

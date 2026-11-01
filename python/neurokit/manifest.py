@@ -2,7 +2,7 @@
 
 Each parameter's type hint, such as ``Annotated[str, Field(max_length=200)]``,
 becomes pydantic's JSON Schema, which maps onto a manifest argument. A limit
-the manifest cannot hold, such as ``min_length``, is refused, never dropped.
+the manifest cannot hold, such as ``pattern``, is refused, never dropped.
 """
 
 import inspect
@@ -14,7 +14,7 @@ from pydantic import TypeAdapter
 SPEC = 1
 # The JSON Schema keys each type maps; any other key is refused.
 MAPPED_KEYS = {
-    "string": {"maxLength"},
+    "string": {"minLength", "maxLength"},
     "integer": {"minimum", "maximum"},
     "boolean": set(),
     "array": {"items", "maxItems"},
@@ -36,7 +36,7 @@ def build_manifest(broker, module_name):
 
     Raises:
         ValueError: A parameter has no manifest form. The message is one
-            line, such as ``f(name): the manifest cannot hold ['minLength']``.
+            line, such as ``f(name): the manifest cannot hold ['pattern']``.
     """
     runner = ["python3", "-m", "neurokit"]
     return {
@@ -127,7 +127,10 @@ def to_manifest_arg(schema, defs, where):
     if missing:
         raise ValueError(f"{where}: needs a Field limit for {sorted(missing)}")
     if kind == "string":
-        return {"type": "string", "max_length": schema["maxLength"]}
+        arg = {"type": "string", "max_length": schema["maxLength"]}
+        if "minLength" in schema:
+            arg["min_length"] = schema["minLength"]
+        return arg
     if kind == "integer":
         return {
             "type": "integer",
