@@ -4,7 +4,7 @@ neurokit is one Go binary for the boundary between an AI assistant's command-lin
 
 In a broker container, `neurokit serve` checks every request against that manifest and runs the tool's handler program for it, in its own process group and under a hard deadline. On the assistant's side, the same binary is the client: see [Calling a broker](#calling-a-broker).
 
-neurokit has no release yet; it is being built toward `v0.1.0`. [Layout](#layout) lists what each package holds so far.
+`v0.1.0` is neurokit's first release tag. [Layout](#layout) lists what each package holds.
 
 [How a request travels](docs/explanation/request-lifecycle.md) follows one request through the broker and its handler, including what happens when the client hangs up, the deadline passes or the broker stops.
 
@@ -39,6 +39,8 @@ A mutation that gets no usable reply after connecting is `change-unknown`, becau
 ## Python tools
 
 `python/neurokit` is a Python library for writing a tool as plain functions. It writes the tool's manifest and answers the broker's requests, so the tool has no code of its own for either. Install it with `pip install ./python`; it needs Python 3.12 or later, brings pydantic, and shows in pip as `neurokit-broker`.
+
+[Write a Python tool](docs/how-to/write-a-python-tool.md) builds a small tool from start to finish: its commands, its manifest, a caller and tests against a real broker.
 
 A tool module defines one `Broker`. Each command is a function. The command's name is the function's name with `_` changed to `-`, so `save_greeting` becomes `save-greeting`.
 

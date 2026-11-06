@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurokit-broker"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Write a neurokit tool's commands as Python functions."
 license = "MIT"
 requires-python = ">=3.12"
